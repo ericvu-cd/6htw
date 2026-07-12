@@ -1,0 +1,1177 @@
+html {
+    height: 100%;
+    background: #000;
+}
+/* 禁用長按彈出瀏覽器選單與文字選取（全手機遊戲通用設定） */
+* {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+/* 輸入欄位恢復正常（若未來有表單） */
+input, textarea {
+    -webkit-user-select: text;
+    user-select: text;
+}
+:root { --p: #1976D2; --ai1: #D32F2F; --ai2: #388E3C; --ai3: #7B1FA2; }
+/* 效能／耗電優化：App 切到背景（見 perf.js）時，暫停所有 CSS
+   infinite 動畫（呼吸光暈、箭頭閃爍、自動翻牌等），避免背景空跑。 */
+body.app-bg-paused,
+body.app-bg-paused * {
+    animation-play-state: paused !important;
+}
+/* 等待鎖定遮罩：透明但攔截所有觸控 */
+#ui-lock {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    background: transparent;
+    pointer-events: all;
+}
+body {
+    font-family: "Microsoft JhengHei", sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background: transparent;
+    transform: translateZ(0);
+}
+
+#ocean-bg-video {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    object-fit: cover;
+    z-index: -1;
+    pointer-events: none;
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    contain: layout paint size;
+}
+/* 讓 body 底下的所有東西預設先消失（影片排除，避免 opacity transition 打斷 GPU 合成） */
+body > *:not(#welcome-screen):not(#intro-screen):not(#collection-modal):not(#collection-zoom-overlay):not(#ocean-bg-video) {
+    visibility: hidden;
+    opacity: 0;
+}
+
+/* 當遊戲開始，給 body 加一個類別，讓內容顯現 */
+body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-modal):not(#collection-zoom-overlay):not(#ocean-bg-video) {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 1s ease;
+}
+
+#welcome-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    /* 步驟 3: 設定初始透明度為 0，並執行淡入動畫 */
+    opacity: 0;
+    animation: welcomeFadeIn 1.5s ease-in-out forwards;
+    
+    /* 這裡保留原本消失用的過渡效果 */
+    transition: opacity 1.2s ease-in-out, visibility 1.2s;
+}
+
+/* 步驟 4: 定義淡入動畫 */
+@keyframes welcomeFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 點擊按鈕後消失用的類別 */
+#welcome-screen.fade-out {
+    opacity: 0;
+    visibility: hidden;
+}
+#welcome-screen.hidden {
+    opacity: 0;
+    visibility: hidden; /* 使用 visibility 讓它在動畫完後不干涉點擊，且能保有過渡效果 */
+    pointer-events: none; /* 確保徹底無法被點擊 */
+}
+
+#header {
+    background: transparent;
+    color: transparent;
+    padding: 0;
+    height: 0;
+    overflow: visible;
+    position: relative;
+    z-index: 50;
+    pointer-events: none;
+}
+
+/* 歷史紀錄按鈕 */ 
+#log-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 2000;
+    background: rgba(0,20,60,0.75);
+    color: rgba(200,235,255,0.95);
+    padding: 4px 10px;
+    border-radius: 30px;
+    border: 1px solid rgba(100,180,255,0.25);
+    font-weight: bold;
+    font-size: 0.8rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: 0.2s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    white-space: nowrap;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    height: auto;
+}
+#log-btn:active { transform: scale(0.95); }
+
+/* 彈出式日誌視窗 */
+#log-modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); z-index: 4000;
+    display: none; justify-content: center; align-items: center;
+}
+#log-content {
+    background: rgba(255,255,255,0.98);
+    width: 90%; max-width: 500px; height: 60vh;
+    border-radius: 20px; display: flex; flex-direction: column;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+.log-header {
+    background: #00796b; color: white; padding: 15px; font-weight: bold;
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 1.2rem;
+}
+.log-header button {
+    background: #ffdfba; border: none; border-radius: 10px;
+    padding: 5px 15px; font-weight: bold; color: #d35400; cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+#log-copy-btn {
+    background: rgba(255,255,255,0.25);
+    color: white;
+}
+#log-messages {
+    padding: 15px; overflow-y: auto; flex-grow: 1; font-size: 1rem; line-height: 1.55;
+    color: #333; font-weight: 400;
+}
+
+/* ── 新版「分回合」出牌紀錄樣式 ── */
+.log-block { padding: 10px 0 16px; border-bottom: 1px dashed #cfd8dc; }
+.log-block:last-child { border-bottom: none; }
+.log-line { padding: 1px 0; word-break: break-word; }
+.log-gap { height: 8px; }
+.log-divider-heavy, .log-divider-light {
+    height: 0; margin: 8px 0; font-size: 0; line-height: 0; color: transparent; overflow: hidden;
+}
+.log-divider-heavy { border-top: 2px solid #80cbc4; }
+.log-divider-light { border-top: 1px dashed #b0bec5; }
+.log-title {
+    text-align: center; font-weight: 900; font-size: 1.15rem; color: #00796b;
+}
+.log-round-num {
+    text-align: center; font-weight: 900; font-size: 1.05rem; color: #00796b;
+}
+.log-meta { color: #455a64; }
+.log-summon-caller { color: #607d8b; font-style: italic; }
+.log-pass { color: #2e7d32; font-weight: 700; }
+.log-fail { color: #8d6e63; }
+.log-warn { color: #e65100; font-style: italic; }
+.log-share { color: #1565c0; font-weight: 600; }
+
+
+.char-area { 
+    background: rgba(0, 0, 0, 0.08);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 54px 2px 8px;
+    transition: all 0.3s;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    z-index: 10;
+    will-change: transform;
+    transform: translateZ(0);
+}
+.box { 
+    flex: 1; margin: 0; padding: 0; border: none; background: transparent; 
+    text-align: center; color: white; transition: all 0.3s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+}
+.ai-name { font-size: 0.85rem; font-weight: bold; text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7); }
+.ai-cards { font-size: 1rem; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
+.avatar-img {
+    width: 55px; height: 55px; background: rgba(0,0,0,0.35);
+    border-radius: 50%; border: 3px solid; display: flex; 
+    justify-content: center; align-items: center; font-size: 1.8rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    transition: all 0.3s;
+}
+#ai-1 .avatar-img { border-color: var(--ai1); }
+#ai-2 .avatar-img { border-color: var(--ai2); }
+#ai-3 .avatar-img { border-color: var(--ai3); }
+.preview-controls {
+    display: flex;
+    gap: 50px;
+    margin-top: 10px;
+    justify-content: center;
+    width: 100%;
+}
+
+.preview-btn {
+    font-size: 22px;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+
+.preview-btn:active { transform: scale(0.9); }
+.btn-confirm { background: #A8E6CF; color: white; }
+.btn-cancel { background: #FFB3BA; color: white; }
+
+/* 輪到誰的動畫特效 */
+@keyframes aiPulseGlow {
+    /* opacity-only：讓合成器處理，不觸發 repaint */
+    0%,100% { opacity: 0.65; }
+    50%      { opacity: 1; }
+}
+.box.is-caller .avatar-img {
+    animation: aiPulseGlow 5s ease-in-out infinite;
+    border-color: #ffdfba !important;
+    color: #ffdfba !important;
+    /* 固定縮放取代動態 scale，靜態不耗效能 */
+    transform: scale(1.15) translateZ(0);
+    box-shadow: 0 0 14px 3px currentColor;
+    will-change: opacity;
+}
+/* 玩家輪次的高亮（is-caller：玩家是召喚者，AI 跟牌中）*/
+@keyframes isCallerPulse {
+    0%, 100% { border-top-color: rgba(255, 179, 71, 0.3); }
+    50%       { border-top-color: rgba(255, 220, 80, 0.8); }
+}
+/* 玩家是召喚者、AI 跟牌中時：player-zone 目前不做任何額外邊框樣式 */
+
+/* ===== 玩家回合強化提示（my-turn：玩家需要出牌）===== */
+@keyframes myTurnPulse {
+    0%, 100% { opacity: 0.4; }
+    50%       { opacity: 1;   }
+}
+#player-zone.my-turn {
+    background:
+        linear-gradient(
+            to top,
+            rgba(255, 200, 60, 0.15) 0%,
+            rgba(255, 200, 60, 0.05) 60%,
+            transparent 100%
+        ),
+        rgba(0, 10, 30, 0.7) !important;
+}
+/* 光暈：靜態 box-shadow + opacity 閃爍，不用 blur */
+#player-zone.my-turn::after {
+    display: none;
+}
+
+
+
+.mazu-glow {
+    background: rgba(60, 30, 0, 0.75) !important;
+    box-shadow: 0 0 40px #f5b942, inset 0 0 20px rgba(245,185,66,0.15) !important;
+    border: 2px solid #f5b942 !important;
+    color: #fde9a2 !important;
+    animation: mazuPulse 2s ease-in-out infinite;
+}
+@keyframes mazuPulse {
+    0%, 100% { opacity: 0.85; }
+    50%       { opacity: 1;    }
+}
+
+/* 媽祖贈牌：選擇對象遮罩 */
+#mazu-target-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(40, 18, 0, 0.93);
+    z-index: 4500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+}
+#mazu-target-overlay .mazu-overlay-title {
+    color: #fde9a2;
+    font-size: 1.6rem;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 0 0 20px #f5b942;
+    margin-bottom: 8px;
+}
+#mazu-target-overlay .mazu-overlay-sub {
+    color: #f5cb75;
+    font-size: 1rem;
+    margin-bottom: 12px;
+}
+.mazu-target-btn {
+    background: rgba(255,220,100,0.1);
+    border: 2px solid #f5b942;
+    border-radius: 16px;
+    color: white;
+    padding: 14px 30px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 220px;
+    transition: background 0.2s, transform 0.15s;
+}
+.mazu-target-btn:active { transform: scale(0.96); }
+.mazu-target-btn .btn-cards {
+    font-size: 0.9rem;
+    color: #f5cb75;
+}
+
+/* 贈牌特效：飛行動畫 */
+#mazu-gift-effect {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    pointer-events: none;
+    overflow: hidden;
+}
+.mazu-gift-card-fly {
+    position: absolute;
+    animation: cardFly 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+}
+@keyframes cardFly {
+    0%   { opacity: 1; transform: scale(1) translate(0, 0); }
+    60%  { opacity: 1; transform: scale(1.15) translate(var(--fly-x), var(--fly-y)); }
+    100% { opacity: 0; transform: scale(0.7) translate(var(--fly-x2), var(--fly-y2)); }
+}
+.mazu-gift-banner {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: linear-gradient(135deg, #4a2800, #7a4500);
+    border: 3px solid #f5b942;
+    border-radius: 20px;
+    padding: 20px 30px;
+    color: white;
+    text-align: center;
+    animation: bannerPop 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards, bannerBreathe 2s ease-in-out 0.4s infinite;
+    z-index: 5001;
+    pointer-events: none;
+    min-width: 260px;
+    will-change: transform, opacity, box-shadow;
+    backface-visibility: hidden;
+}
+@keyframes bannerPop {
+    from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    to   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+}
+@keyframes bannerBreathe {
+    0%, 100% { box-shadow: 0 0 20px rgba(245,185,66,0.4); }
+    50%       { box-shadow: 0 0 50px rgba(245,185,66,0.9), 0 0 0 6px rgba(245,185,66,0.15); }
+}
+.mazu-gift-banner .banner-icon  { font-size: 2.5rem; margin-bottom: 8px; }
+.mazu-gift-banner .banner-from  { font-size: 1rem; color: #f5cb75; margin-bottom: 4px; }
+.mazu-gift-banner .banner-fish  { font-size: 1.6rem; font-weight: bold; color: #fde9a2; margin: 6px 0; }
+.mazu-gift-banner .banner-to    { font-size: 1rem; color: #f5cb75; }
+.mazu-gift-banner .banner-img-wrap {
+    width: 100%;
+    height: 120px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    background: rgba(0,0,0,0.2);
+}
+.mazu-gift-banner .banner-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#ocean {
+    flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    position: relative; margin: 5px; border-radius: 12px;
+    padding-top: 35px;
+    min-height: 0;
+    background: transparent;
+    z-index: 1;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+
+
+
+
+
+
+
+#summon-display { z-index: 205; position: relative; background: rgba(0,20,60,0.82); padding: 10px; border-radius: 12px; width: 92%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15); margin-bottom: 5px; font-weight: bold; min-height: 50px; border: 3px solid rgba(100,180,255,0.3); font-size: 1.05rem; color: #e0f4ff; display: flex; align-items: center; justify-content: center; line-height: 1.4; white-space: pre-wrap; box-sizing: border-box; transition: all 0.3s; text-shadow: 0 1px 8px rgba(0,0,0,0.8); }
+
+/* 召喚聚焦遮罩 */
+#summon-focus-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 10, 30, 0.82);
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+/* 遮罩內的召喚框複製體 */
+#summon-focus-box {
+    background: rgba(0,20,60,0.92);
+    border: 1px solid rgba(100,180,255,0.5);
+    border-radius: 20px;
+    padding: 20px 22px;
+    width: 82%;
+    max-width: 420px;
+    max-height: 78vh;
+    overflow: hidden;
+    box-sizing: border-box;
+    text-align: center;
+    color: #e0f4ff;
+    font-size: 1.35rem;
+    font-weight: bold;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    box-shadow: 0 0 60px rgba(100,180,255,0.2), 0 16px 40px rgba(0,0,0,0.6);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+    animation: summonPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+#summon-focus-box.mazu-style {
+    background: rgba(60,30,0,0.85) !important;
+    border-color: #f5b942 !important;
+    color: #fde9a2 !important;
+    box-shadow: 0 0 60px rgba(245,185,66,0.3), 0 16px 40px rgba(0,0,0,0.6) !important;
+}
+/* 召喚彈入動畫 */
+@keyframes summonPop {
+    0%   { transform: scale(0.75) translateY(-16px); opacity: 0; }
+    70%  { transform: scale(1.04) translateY(0);     opacity: 1; }
+    100% { transform: scale(1)    translateY(0);     opacity: 1; }
+}
+#table { z-index: 5; position: relative; display: flex; gap: 6px; flex-grow: 1; min-height: 122px; align-items: center; width: 95%; justify-content: center; overflow-x: auto; }
+#deck-info { position: absolute; top: 5px; left: 5px; background: rgba(252,230,127,0.6); color: rgba(200,235,255,0.95); padding: 4px 10px; border-radius: 30px; font-size: 0.8rem; font-weight: bold; z-index: 5; border: 1px solid rgba(100,180,255,0.25); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
+/* 玩家區：極淡半透明 */
+#player-zone {
+    background: transparent;
+    padding: 8px;
+    border-top: 1px solid rgba(100,180,255,0.2);
+    transition: all 0.3s;
+    border-radius: 15px 15px 0 0;
+    position: relative;
+    z-index: 10;
+    will-change: transform;
+    transform: translateZ(0);
+}
+.hand { display: flex; overflow-x: auto; gap: 6px; padding-bottom: 5px; min-height: 126px; align-items: flex-end; -webkit-overflow-scrolling: touch; }
+
+/* 預覽放大卡牌專用 */
+#card-preview-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.82); z-index: 4500;
+    display: none; justify-content: center; align-items: center;
+}
+#card-preview-container {
+    transform: scale(1);
+    transition: transform 0.2s;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 詳情卡片本體 */
+.preview-detail-card {
+    width: 300px;
+    background: white;
+    border-radius: 20px;
+    border: 4px solid #ccc;
+    overflow: hidden;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+/* 圖片區 */
+.preview-fish-img-wrap {
+    width: 100%;
+    height: 200px;
+    background: #e8f4f8;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+.preview-fish-img-wrap.no-img {
+    background: linear-gradient(135deg, #e8f4f8, #d0e8f0);
+}
+.preview-fish-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 魚名 */
+.preview-fish-name {
+    font-size: 2rem;
+    font-weight: 900;
+    text-align: center;
+    padding: 10px 8px 8px;
+    color: #333;
+    border-bottom: 2px solid #eee;
+}
+
+/* 標籤區 */
+.preview-fish-tags {
+    padding: 8px 12px 6px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.preview-fish-tags .tag {
+    font-size: 1rem;
+    padding: 5px 12px;
+    margin: 3px;
+}
+
+/* 介紹文字 */
+.preview-fish-desc {
+    font-size: 1.1rem;
+    color: #555;
+    line-height: 1.6;
+    padding: 8px 16px 16px;
+    text-align: justify;
+}
+
+.preview-detail-card {
+    width: 260px;
+}
+.preview-fish-img-wrap {
+    height: 173px;
+}
+.preview-fish-name {
+    font-size: 1.6rem;
+}
+.preview-fish-tags .tag {
+    font-size: 0.85rem;
+    padding: 4px 10px;
+}
+
+.ctrl-btn { padding: 5px 10px; background: rgba(255,255,255,0.6); border: none; border-radius: 20px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+#info-overlay { display: none; }
+
+/* =============================================
+   卡牌基礎：冰晶玻璃 + 鐵金屬框架
+   ============================================= */
+.card {
+    width: 74px;
+    height: 115px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    position: relative;
+    touch-action: manipulation;
+    overflow: hidden;
+    transition: transform 0.6s ease, box-shadow 0.22s ease;
+
+    background: transparent;
+
+    /* 鐵金屬雙層外框 + 懸浮陰影 */
+    box-shadow:
+        0 0 0 1.5px rgba(160,200,255,0.3),
+        0 0 0 3.5px rgba(80,120,180,0.2),
+        0 0 10px rgba(100,160,255,0.18),
+        0 8px 16px rgba(0,10,40,0.55),
+        0 18px 36px rgba(0,5,30,0.4);
+}
+
+/* 效能優化：不再讓「每一張卡」永久提升為獨立 GPU 合成層。
+   之前 will-change / preserve-3d / translateZ(0) 是套在 .card 這個
+   基礎規則上，代表整場遊戲裡所有已出的桌面牌、AI 展示牌、手牌全部
+   永久佔用合成層，牌越多、手機 GPU 記憶體與耗電就越高。
+   現在只在「真的會 3D 翻轉／位移」的狀態 class 上才提升合成層，
+   動畫結束、class 移除後就會自動釋放合成層。 */
+.card.is-valid,
+.card.flipped,
+.card.card-auto-flip {
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+
+/* 鐵框內側細線 — 桌面大卡 */
+.card:not(#player-hand .card)::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 13px;
+    border: 1px solid rgba(255,255,255,0.13);
+    pointer-events: none;
+    z-index: 20;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        inset 0 -1px 0 rgba(0,0,0,0.2);
+}
+
+/* ── 手牌翻轉：正反面共用基礎 ── */
+.card-front,
+.card-back {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    display: flex;
+    flex-direction: column;
+    background: #0a1a3a;
+}
+
+/* 反面預設翻轉 180° */
+.card-back {
+    transform: rotateY(180deg);
+}
+
+/* 翻轉觸發 class */
+#player-hand .card.flipped {
+    transform: rotateY(180deg);
+}
+
+/* CSS 自動翻牌動畫：取代 JS setInterval，由合成器執行不佔主執行緒 */
+@keyframes cardFlipCycle {
+    0%, 45%   { transform: rotateY(0deg); }
+    50%, 95%  { transform: rotateY(180deg); }
+    100%      { transform: rotateY(0deg); }
+}
+#player-hand .card.card-auto-flip {
+    animation: cardFlipCycle 10s ease-in-out infinite;
+}
+
+/* 反面：魚名下方的特性標籤容器 */
+.card-back-tags {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 3px 2px 2px;
+    background-color: #000;
+    background-image: radial-gradient(rgba(180,210,255,0.2) 1px, transparent 1px);
+    background-size: 10px 10px;
+}
+.card-back-tags .tag {
+    font-size: 0.62rem;
+    padding: 1px 3px;
+    border-radius: 3px;
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.card-n { font-weight: 900; text-align: center; padding: 4px 1px; border-bottom: 1px solid rgba(0,0,0,0.12); font-size: 0.8rem; color: #444; position: relative; z-index: 5; border-radius: 8px 8px 0 0; }
+.light-1 .card-n { background-color: #d4f5e2 !important; color: #1b4d2e; }
+.light-2 .card-n { background-color: #fef3cd !important; color: #5d4037; }
+.light-3 .card-n { background-color: #ffd6da !important; color: #7b1c2a; }
+
+.card-img {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000;
+    background-image: radial-gradient(rgba(180,210,255,0.2) 1px, transparent 1px);
+    background-size: 10px 10px;
+}
+.card-img img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.card-i { padding: 2px; flex-grow: 1; color: #222; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background-color: #000; background-image: radial-gradient(rgba(180,210,255,0.2) 1px, transparent 1px); background-size: 15px 15px; position: relative; z-index: 5; }
+
+.card:active { transform: scale(0.95) translateY(3px) !important; transition: transform 0.08s ease !important; }
+
+.tag { display: inline-block; padding: 2px 4px; border-radius: 4px; font-size: 0.6rem; margin: 1px; color: white; font-weight: bold; text-shadow: 1px 1px 1px rgba(0,0,0,0.3); white-space: nowrap; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); line-height: 1.1; }
+.tag-spring { background-color: #f48fb1; }
+.tag-summer { background-color: #ffd54f; color: #5d4037; }
+.tag-autumn { background-color: #ff8a65; }
+.tag-winter { background-color: #4fc3f7; }
+.tag-all { background-color: #90a4ae; }
+.tag-eco { background-color: #1B5E20; }
+.tag-warn { background-color: #ba68c8; }
+.tag-migratory { background-color: #8B0000; }
+.tag-sedentary { background-color: #8d6e63; }
+.tag-coastal { background-color: #FBC02D; color: #5D4037 !important; }
+.tag-ocean { background-color: #1565c0; }
+.tag-farm { background-color: #66bb6a; }
+
+/* 不可出牌 */
+.is-not-valid { filter: brightness(0.6) grayscale(0.2); }
+
+/* 可出牌（全域，桌面卡用） */
+.card.is-valid { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+
+/* =============================================
+   手牌區卡牌
+   ============================================= */
+#player-hand .card {
+    position: relative;
+    border-radius: 15px;
+    overflow: visible;
+    transition: transform 0.6s ease, box-shadow 0.22s ease;
+}
+
+/* 符合條件的紅點標記 — 貼在卡片右上角外側，像通知徽章 */
+.valid-dot {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 14px;
+    height: 14px;
+    background: #e53935;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 0 6px rgba(229,57,53,0.9), 0 0 12px rgba(229,57,53,0.5);
+    pointer-events: none;
+    z-index: 30;
+}
+
+/* 手牌允許紅點溢出卡片邊框 */
+#player-hand .card {
+    overflow: visible;
+}
+
+/* 按下效果 */
+#player-hand .card:active {
+    transform: translateY(3px) !important;
+    box-shadow:
+        0 0 0 1.5px rgba(120,160,220,0.2),
+        0 2px 6px rgba(0,0,0,0.45) !important;
+    transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+#player-hand .card.flipped:active {
+    transform: rotateY(180deg) translateY(3px) !important;
+}
+
+/* 燈號色帶 */
+#player-hand .light-1 { border-top: 4px solid #4caf50 !important; }
+#player-hand .light-2 { border-top: 4px solid #ffc107 !important; }
+#player-hand .light-3 { border-top: 4px solid #f44336 !important; }
+
+#header { font-size: 1.3rem; padding: 10px; }
+.avatar-img { width: 40px; height: 40px; font-size: 1.3rem; border-width: 2px; }
+.ai-name { font-size: 0.85rem; }
+#ocean { margin: 5px 5px 0 5px; border-radius: 12px; padding-top: 35px; }
+#deck-info { font-size: 0.8rem; padding: 4px 10px; top: 5px; left: 5px; background: rgba(252, 230, 127, 0.6); }
+#summon-display { font-size: 1.05rem; padding: 10px; width: 92%; min-height: 50px; margin-bottom: 5px; border-width: 3px; border-radius: 12px; }
+.hand { min-height: 126px; gap: 6px; padding-bottom: 5px; }
+.card { width: 74px; height: 115px; border-radius: 8px; border-width: 1px; }
+.card-n { font-size: 0.8rem; padding: 4px 1px; border-bottom-width: 1px; }
+.card-i { padding: 2px; }
+.tag { font-size: 0.6rem; padding: 2px 4px; border-radius: 4px; margin: 1px; line-height: 1.1; }
+
+@keyframes playCardAnim {
+    0% { transform: translateY(100px) scale(0.5); opacity: 0; }
+    70% { transform: translateY(-10px) scale(1.1); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.card-played { animation: playCardAnim 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important; transition: none !important; }
+
+#chat-layer {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 2500;
+}
+
+.chat-bubble {
+    position: absolute;
+    background: white;
+    padding: 8px 10px;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    white-space: nowrap;
+    animation: fadeInOut 3s ease forwards;
+    contain: layout paint;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(10px); }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
+.chat-bubble {
+    max-width: 200px;
+    white-space: normal;
+    word-break: break-word;
+}
+
+/* 倒數結算氣泡 */
+.countdown-bubble {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 2px solid #77D9A8;
+    border-radius: 20px !important;
+    padding: 10px 18px !important;
+    font-size: 1.1rem !important;
+    white-space: nowrap !important;
+    max-width: none !important;
+    opacity: 1 !important;
+    animation: countdownBreathe 1.8s ease-in-out infinite !important;
+    will-change: transform, opacity;
+}
+.countdown-bubble-count {
+    display: inline-block;
+    min-width: 1.2em;
+    text-align: center;
+}
+@keyframes countdownBreathe {
+    0%, 100% { box-shadow: 0 4px 10px rgba(119,217,168,0.3); }
+    50%       { box-shadow: 0 4px 28px rgba(119,217,168,0.9), 0 0 0 4px rgba(119,217,168,0.15); }
+}
+
+.tutorial-highlight {
+    position: relative;
+    z-index: 5000;
+    box-shadow: 0 0 0 5px rgba(255,255,0,0.8),
+                0 0 25px rgba(255,255,0,0.8);
+    border-radius: 15px;
+}
+
+#tutorial-tooltip {
+    position: fixed;
+    z-index: 6000;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    max-width: 260px;
+    text-align: center;
+    pointer-events: none;
+    transition: all 0.2s;
+	display: none;
+}
+
+/* =============================================
+   上滑提示箭頭
+   ============================================= */
+#drawer-up-arrow {
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: rgba(255, 210, 120, 0.85);
+    letter-spacing: 0.1em;
+    padding: 2px 0 1px;
+    transform: scale(1.1);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* =============================================
+   手牌抽屜（Drawer）
+   ============================================= */
+#hand-drawer {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 800;
+    background: rgba(6, 14, 36, 0.97);
+    border-top: 1.5px solid rgba(100, 180, 255, 0.4);
+    border-radius: 14px 14px 0 0;
+    padding: 6px 8px 10px;
+    max-height: 72vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.25s ease-out;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.drawer-handle-bar {
+    width: 36px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    margin: 0 auto 6px;
+}
+
+.drawer-hint {
+    font-size: 0.72rem;
+    color: rgba(200, 230, 255, 0.45);
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+}
+
+/* 3欄網格 */
+.drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+/* 每張卡的外層包裹（放紅點用） */
+.drawer-card-wrap {
+    position: relative;
+}
+
+/* 抽屜卡片本體 */
+.drawer-card {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(100, 180, 255, 0.18);
+    background: rgba(255, 255, 255, 0.09);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    height: 160px;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.drawer-card:active {
+    transform: scale(0.95);
+}
+
+/* 符合條件的抽屜卡 */
+.drawer-card.drawer-valid {
+    border-color: rgba(229, 57, 53, 0.65);
+    box-shadow: 0 0 6px rgba(229, 57, 53, 0.35);
+}
+
+/* 燈號色帶（沿用 light- class） */
+.drawer-card.light-1 { border-top: 3px solid #4caf50; }
+.drawer-card.light-2 { border-top: 3px solid #ffc107; }
+.drawer-card.light-3 { border-top: 3px solid #f44336; }
+
+/* 魚名 */
+.drawer-card-name {
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-align: center;
+    padding: 5px 3px 4px;
+    border-bottom: 1px solid rgba(0,0,0,0.12);
+    position: relative;
+    z-index: 5;
+}
+.drawer-card.light-1 .drawer-card-name { background: #d4f5e2; color: #1b4d2e; }
+.drawer-card.light-2 .drawer-card-name { background: #fef3cd; color: #5d4037; }
+.drawer-card.light-3 .drawer-card-name { background: #ffd6da; color: #7b1c2a; }
+
+/* 魚圖：contain 顯示完整，黑底加點點 */
+.drawer-card-img {
+    height: 59px;
+    overflow: hidden;
+    background-color: #000;
+    background-image: radial-gradient(rgba(180,210,255,0.18) 1px, transparent 1px);
+    background-size: 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.drawer-card-img img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+/* 標籤區 */
+.drawer-card-tags {
+    flex: 1;
+    overflow: hidden;
+    padding: 3px 2px 3px;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    justify-content: center;
+    gap: 0;
+}
+.drawer-card-tags .tag {
+    font-size: 0.62rem;
+    padding: 1px 4px;
+    margin: 1px;
+    line-height: 1.2;
+}
+
+/* 符合條件紅點（右上角） */
+.drawer-valid-dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 11px;
+    height: 11px;
+    background: #e53935;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 6px rgba(229, 57, 53, 0.8);
+    pointer-events: none;
+    z-index: 30;
+}
+@keyframes modalPop {
+    from { 
+        transform: scale(0.8); 
+        opacity: 0; 
+    }
+    to { 
+        transform: scale(1); 
+        opacity: 1; 
+    }
+}
+
+/* 這是要套用在彈窗容器上的類別 */
+.summary-pop-anim {
+    animation: modalPop 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    /* cubic-bezier 增加一點點「Q彈」的感覺 */
+}
+
+/* AI 最後一張牌的閃爍效果：只動 transform + opacity，交給合成器處理，
+   不再用 filter: drop-shadow（會逐幀重繪）。紅色光暈改用固定的
+   text-shadow，只在套用 class 當下算一次，動畫過程中不會重算。 */
+@keyframes last-card-blink {
+    0%, 100% { transform: scale(1);   opacity: 1; }
+    50%      { transform: scale(1.3); opacity: 0.55; }
+}
+
+.ai-last-card-danger {
+    display: inline-block;
+    animation: last-card-blink 0.6s infinite ease-in-out;
+    /* 讓 🎴 變色或加強存在感 */
+    position: relative;
+    text-shadow: 0 0 4px red, 0 0 8px red;
+}
+
+/* 牌堆告急閃爍 */
+.deck-danger {
+    color: #ff5252 !important;
+    font-weight: bold;
+    animation: pulse-simple 1s infinite;
+}
+
+@keyframes pulse-simple {
+    50% { opacity: 0.5; }
+}
+
+/* 手牌左右溢出指示箭頭（純視覺，手機觸控滑動用） */
+.hand-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 50px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    pointer-events: none;
+    border-radius: 6px;
+    background: linear-gradient(to right, rgba(0,10,30,0.55), rgba(0,10,30,0.0));
+}
+
+#arrow-left  { left: 0; background: linear-gradient(to right, rgba(0,10,30,0.6), rgba(0,10,30,0.0)); }
+#arrow-right { right: 0; background: linear-gradient(to left,  rgba(0,10,30,0.6), rgba(0,10,30,0.0)); }
+
+/* 三角形指示 */
+.hand-arrow::after {
+    content: "";
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+}
+#arrow-right::after {
+    border-left: 11px solid rgba(255, 255, 255, 0.55);
+    margin-left: 4px;
+}
+#arrow-left::after {
+    border-right: 11px solid rgba(255, 255, 255, 0.55);
+    margin-right: 4px;
+}
+
+/* 玩家回合時箭頭更醒目但仍柔和 */
+#player-zone.my-turn #arrow-right::after {
+    border-left-color: rgba(255, 210, 120, 0.80);
+}
+#player-zone.my-turn #arrow-left::after {
+    border-right-color: rgba(255, 210, 120, 0.80);
+}
+
+@keyframes arrow-pulse-right {
+    0%, 100% { opacity: 0.5; transform: translateY(-50%) translateX(0); }
+    50%       { opacity: 1;   transform: translateY(-50%) translateX(3px); }
+}
+@keyframes arrow-pulse-left {
+    0%, 100% { opacity: 0.5; transform: translateY(-50%) translateX(0); }
+    50%       { opacity: 1;   transform: translateY(-50%) translateX(-3px); }
+}
+#arrow-right { animation: arrow-pulse-right 1.6s ease-in-out infinite; }
+#arrow-left  { animation: arrow-pulse-left  1.6s ease-in-out infinite; }
+
+/* 讓手牌區可以水平滾動 */
+#player-hand {
+    display: flex;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding: 10px 8px;
+    gap: 10px;
+}
+
+/* 隱藏滾動條（讓畫面更乾淨） */
+#player-hand::-webkit-scrollbar {
+    display: none;
+}
