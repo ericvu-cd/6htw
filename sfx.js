@@ -8,6 +8,13 @@
 //   4. 海洋主題 — 每個音效都有水聲、氣泡、共鳴感
 //   5. BGM 也接進 Web Audio API — 手機上與音效走同一音訊路由，
 //      避免 <audio> 媒體音量 vs Web Audio 鈴聲音量不一致的問題
+//
+// ⚠️ iOS Safari 音訊解鎖限制：
+//   AudioContext 在建立當下預設是 "suspended"（暫停）狀態，iOS Safari
+//   規定「一定要在使用者手勢事件（click/touchstart 等）的同步呼叫堆疊內」
+//   呼叫 resume() 才能真正解鎖發聲，時間差一點點（例如包在 setTimeout、
+//   Promise.then 裡）都可能失敗。日後如果收到「iPhone 沒聲音」的回報，
+//   優先檢查：resume() 有沒有確實掛在使用者互動事件的同步呼叫裡。
 // =============================================
 
 const SFX = (() => {

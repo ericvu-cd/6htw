@@ -893,6 +893,11 @@ function tutorFinish() {
 
 // ======================
 // 🎮 攔截 playerAction
+// ⚠️ Monkey-patch 警語：本函式整個覆蓋 main.js 定義的 window.playerAction，
+//    把原函式存成 _orig 再包一層教學邏輯。這代表：
+//    1) main.js 必須在本檔案「之前」載入（見 index.html 的 <script> 順序）。
+//    2) 若之後在 main.js 修改 playerAction 的函式名稱或呼叫方式，這裡會
+//       悄悄失效（不會報錯，但新手教學會表現異常），請同步檢查此處。
 // ======================
 (function patchPlayerAction() {
     const _orig = window.playerAction;
@@ -906,6 +911,8 @@ function tutorFinish() {
         if (phase === "PLAYER_MAZU") {
             tutorClearHighlight();
             tutorHide();
+            // ⚠️ 這裡又對 window.confirmMazuGift 做了一次 monkey-patch
+            //    （同樣的耦合風險，見上方 patchPlayerAction 的警語）
             const _origConfirm = window.confirmMazuGift;
             window.confirmMazuGift = function(cardIdx, target) {
                 const card = players[0].hand.splice(cardIdx, 1)[0];
@@ -959,6 +966,8 @@ function tutorFinish() {
 
 // ======================
 // 🛡️ 攔截 showCardPreview
+// ⚠️ Monkey-patch 警語：同樣覆蓋 main.js 的 window.showCardPreview，
+//    載入順序與失效風險同上方 patchPlayerAction 的說明。
 // ======================
 (function patchShowCardPreview() {
     const _orig = window.showCardPreview;

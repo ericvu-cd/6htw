@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>海紋守護團 台灣海線任務 - 桌面版</title>
+<link rel="icon" href="data:,">
+<style>
+    html, body {
+        margin: 0;
+        height: 100%;
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+    }
+    /* 外框：純裝飾用的邊框，跟縮放計算完全分開，不會裁切到內容 */
+    #frame-border {
+        padding: 6px;
+        background: #1a1a1a;
+        border-radius: 32px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    }
+    /* 真正裁切內容的容器：大小 = 設計尺寸 × 縮放倍率（由 JS 算出來寫進這裡） */
+    #frame-outer {
+        position: relative;
+        overflow: hidden;
+        border-radius: 26px;
+        background: #000;
+    }
+    /* iframe 本身永遠鎖定在設計尺寸 436x892，內部看到的 CSS 像素永遠跟遊戲設計時一樣，
+       不會因為畫面縮放而擠壓變形，排版永遠正確；縮放交給 transform 處理，
+       transform 只是「視覺上」把整個畫面等比例縮小/放大，不影響內部佈局計算。 */
+    #frame-outer iframe {
+        display: block;
+        width: 436px;
+        height: 892px;
+        border: 0;
+        transform-origin: top left;
+    }
+</style>
+</head>
+<body>
+    <div id="frame-border">
+        <div id="frame-outer">
+            <iframe id="frame-iframe" src="index.html?embedded=1" title="海紋守護團 台灣海線任務"></iframe>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        /* ⚠️ 這是遊戲版面的「設計基準尺寸」，跟 index.html 的手機版排版是
+           對應死的（目前 436x892）。如果之後調整遊戲的版面比例／改了
+           style.css 裡跟版面尺寸相關的設定，這裡也要同步改，不然桌機
+           展示版縮放出來的畫面比例會跟手機版對不上。 */
+        var DESIGN_W = 436;
+        var DESIGN_H = 892;
+        var outer = document.getElementById('frame-outer');
+        var iframe = document.getElementById('frame-iframe');
+
+        function fit() {
+            // 讓可用空間扣掉一點邊距，畫面不會頂到瀏覽器邊緣
+            var availW = window.innerWidth * 0.94;
+            var availH = window.innerHeight * 0.94;
+            var scale = Math.min(availW / DESIGN_W, availH / DESIGN_H);
+
+            iframe.style.transform = 'scale(' + scale + ')';
+            outer.style.width = (DESIGN_W * scale) + 'px';
+            outer.style.height = (DESIGN_H * scale) + 'px';
+        }
+
+        fit();
+        window.addEventListener('resize', fit);
+    })();
+    </script>
+</body>
+</html>

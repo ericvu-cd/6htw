@@ -32,9 +32,19 @@
                    characterDB（AI 角色）、locationDB（漁港）、dialogueDB（AI 台詞）
      sfx.js      — SFX 音效物件
      win-screen.js — showWinScreen()
+
+   ⚠️ 反向依賴（會被其他檔案動態改寫，修改時要留意）：
+     tutorial.js 會在載入後整個覆蓋（monkey-patch）本檔案定義的
+     playerAction()、confirmMazuGift()、showCardPreview() 三個函式，
+     藉此插入新手教學邏輯。這代表：
+       1) index.html 裡 tutorial.js 的 <script> 必須排在 main.js 之後。
+       2) 若在本檔案修改這三個函式的名稱或參數簽名，tutorial.js 會悄悄
+          失效（不會報錯，但新手教學會表現異常），務必同步檢查 tutorial.js。
    ═══════════════════════════════════════════════════════════════════════ */
 
-let gameDifficulty = 0.4;
+// 預設難度：讀 db.js 的 difficultyDB 第一級（目前是「新手」0.4），
+// 不在這裡寫死數字，難度設定要改就只改 db.js。
+let gameDifficulty = difficultyDB[0].value;
 
 // ── 對話排隊系統 ────────────────────────
 // 同時間可能有多個 AI 想講話，若直接全部顯示會疊在畫面上互相覆蓋。
@@ -120,6 +130,15 @@ const progress = {
         }
     },
 
+    // 獲勝次數累積（依難度分開計數，每次獲勝都會真的加 1，不是只記一次）
+    recordWin(name, difficultyLabel) {
+        if (!name || !name.trim() || name.trim() === '守護員') return;
+        const data = this.load(name);
+        if (!data.winCounts) data.winCounts = {};
+        data.winCounts[difficultyLabel] = (data.winCounts[difficultyLabel] || 0) + 1;
+        this.save(name, data);
+    },
+
     // 行為型勳章（存入 behaviorBadges 欄位）
     unlockBehaviorBadge(name, badgeName) {
         if (!name || !name.trim() || name.trim() === '守護員') return;
@@ -188,10 +207,25 @@ function preloadImages(prefix, count) {
 // DOMContentLoaded 即刻預載（比 load 早，不等 BGM/大圖載完）
 // DOMContentLoaded 比 window.onload 更早觸發（不必等 BGM、大圖等資源全部載完），
 // 在這裡就先把開場故事圖、說明圖鑑、所有魚卡圖片都預先載入快取。
+// ── 桌機展示模式偵測（desktop.html 用 iframe 包住 index.html?embedded=1）──
+// 只有在 iframe 裡執行才視為桌機展示模式；手機直接開永遠是 false，不受影響。
+const isDesktopMode = (window.self !== window.top);
+
+// 手牌左右按鈕：桌機展示模式專用（手機用觸控滑動，不需要這個）。
+// 一次捲動約 2 張卡的寬度（卡片74px + 間距6px ≈ 80px/張）。
+function scrollHand(direction) {
+    const hand = document.getElementById("player-hand");
+    if (!hand) return;
+    hand.scrollBy({ left: direction * 160, behavior: "smooth" });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     preloadImages('P', 9);  // 預載故事 P1-P9
     preloadImages('F', 18); // 預載說明 F1-F18
     preloadFishImages();     // 預載所有魚圖片
+    if (isDesktopMode) {
+        document.body.classList.add('desktop-mode');
+    }
 });
 
 // 預載魚圖片
@@ -351,7 +385,7 @@ function openCollection() {
     const locationBadges = typeof locationDB !== 'undefined'
         ? locationDB.map(l => l.badge)
         : [];
-    const difficultyBadges = ["新手", "標準", "專業"];
+    const difficultyBadges = difficultyDB.map(d => d.label);
     const fishList = typeof fishDB !== 'undefined' ? fishDB.map(f => f.n) : [];
     const companionList = typeof characterDB !== 'undefined'
         ? characterDB.map(c => ({ n: c.n, img: c.img }))
@@ -363,22 +397,7 @@ function openCollection() {
     const unlockedC = data.companions || [];
     const unlockedBehav = data.behaviorBadges || [];
 
-    const BEHAVIOR_BADGES = [
-        { key: "綠燈先鋒",  icon: "🟢", desc: "本局出牌全為綠燈（至少3張）" },
-        { key: "一支釣達人", icon: "🎣", desc: "本局出4張以上一支釣漁法的魚" },
-        { key: "完美永續局", icon: "🏆", desc: "全綠燈＋全符合召喚＋獲勝" },
-        { key: "紅燈護送員", icon: "🔴", desc: "本局出3張以上紅燈魚" },
-        { key: "養殖支持者", icon: "🌾", desc: "本局出3張以上養殖魚" },
-        { key: "深海傳說",   icon: "🐋", desc: "本局出過鯨鯊（禁止捕撈）" },
-        { key: "浴火重生",   icon: "🔄", desc: "被退牌3張以上仍獲勝" },
-        { key: "百發百中",   icon: "💯", desc: "零退牌且至少出4張獲勝" },
-        { key: "海紋守護王", icon: "👑", desc: "完美永續局＋百發百中＋浴火重生同時達成" },
-        { key: "珊瑚守護者", icon: "🪸", desc: "本局出過全部3種定棲性綠燈魚" },
-        { key: "漁法通",     icon: "🎯", desc: "本局出牌涵蓋5種以上不同漁法" },
-        { key: "近海英雄",   icon: "🌏", desc: "全近海魚＋全符合召喚（至少4張）獲勝" },
-    ];
-
-    const totalAll = locationBadges.length + difficultyBadges.length + fishList.length + companionList.length + BEHAVIOR_BADGES.length;
+    const totalAll = locationBadges.length + difficultyBadges.length + fishList.length + companionList.length + BEHAVIOR_BADGE_DB.length;
     const totalUnlocked = unlockedB.length + unlockedD.length + unlockedF.length + unlockedC.length + unlockedBehav.length;
 
     function pct(got, total) { return total ? Math.round(got / total * 100) : 0; }
@@ -579,7 +598,7 @@ function openCollection() {
             ${difficultyBadgeBlock(difficultyBadges, unlockedD)}
             ${companionBadgeBlock(companionList, unlockedC)}
             ${fishBadgeBlock(fishList, unlockedF)}
-            ${behaviorBadgeBlock(BEHAVIOR_BADGES, unlockedBehav)}
+            ${behaviorBadgeBlock(BEHAVIOR_BADGE_DB, unlockedBehav)}
           </div>
         </div>
     `;
@@ -656,6 +675,10 @@ function closeCollection() {
     if (modal) modal.remove();
 }
 
+/* phase 狀態機五個值的完整說明見檔頭（第 23~28 行）。
+   ⚠️ 這個變數會被 tutorial.js 的 patchPlayerAction() 讀取（判斷是否為
+   PLAYER_MAZU 階段），修改狀態名稱或新增狀態時記得同步檢查 tutorial.js，
+   並同步更新檔頭的狀態說明，避免兩處描述不一致。 */
 let players = [], deckS = [], table = [], currentS = null, callerIdx = 0, phase = "WAIT";
 let initialHands = []; // 各局開始時的初始手牌快照，遊戲結束時寫入 LOG
 
@@ -754,8 +777,13 @@ let previewTimeout = null;
 
 /**
  * @param {number|null} idx - 手牌索引，如果是海洋區卡片則傳 null
- * @param {HTMLElement} originalCardEl - 原始卡片 DOM
+ * @param {Object} fish - fishDB 的魚卡資料物件（不是 DOM 元素），用來取得
+ *                 燈號 l、名稱 n、介紹 i 等欄位渲染放大預覽卡
  * @param {boolean} isHand - 是否為手牌 (決定是否顯示操作按鈕)
+ *
+ * ⚠️ 此函式會被 tutorial.js 的 patchShowCardPreview() 整個攔截包裝
+ *    （monkey-patch，見 tutorial.js 對應區塊的警語）。若修改此函式的
+ *    名稱或參數簽名，務必同步檢查 tutorial.js。
  */
 function showCardPreview(idx, fish, isHand = true) {
     const overlay = document.getElementById("card-preview-overlay");
@@ -1224,6 +1252,7 @@ function initGame(lockedLocationId) {
     document.getElementById("log-btn").style.display = "flex";
     document.getElementById("collection-btn").style.display = "flex";
     document.getElementById("power-save-control").style.display = "flex";
+    document.getElementById("leaderboard-control").style.display = "flex";
     applyPowerSaveMode();
     const music = document.getElementById("bgm");
     const btn = document.getElementById("music-control");
@@ -1319,7 +1348,7 @@ function startGame() {
     
     // 新手難度：玩家優先從 e:1（容易）牌池抽牌，AI 從剩餘隨機抽
     // 專業難度：完全隨機，不分等級
-    if (gameDifficulty <= 0.4) {
+    if (gameDifficulty <= difficultyDB[0].value) {
         const easyPool   = fishD.filter(f => f.e === 1);
         const otherPool  = fishD.filter(f => f.e !== 1);
         const playerHand = [];
@@ -1347,7 +1376,7 @@ function startGame() {
     // 4人輪流，玩家(callerIdx=0)的召喚在 deckS 末端：
     //   第1次玩家召喚 → deckS[length-1]（第1回合）
     //   第2次玩家召喚 → deckS[length-5]（第5回合）
-    if (gameDifficulty <= 0.4) {
+    if (gameDifficulty <= difficultyDB[0].value) {
         const playerHand = players[0].hand;
         const isSafe = s => !s.isMazu && playerHand.some(f => { try { return s.c(f); } catch(e) { return false; } });
 
@@ -1381,8 +1410,11 @@ function startGame() {
     // 重置行為型勳章追蹤
     badgeTracker = { playerCards: [], returnCount: 0, mazuCompleted: false, mazuGiftCard: null };
     
-    const diffLabel = gameDifficulty <= 0.4 ? "新手(難度0.4)" : gameDifficulty >= 0.9 ? "專業(難度0.9)" : "標準(難度0.7)";
-    const diffShort = gameDifficulty <= 0.4 ? "新手" : gameDifficulty >= 0.9 ? "專業" : "標準";
+    // 難度標籤/數值改查 db.js 的 difficultyDB（見 getDifficultyInfo()），
+    // 不在這裡重複寫 gameDifficulty <= 0.4 這類門檻判斷。
+    const diffInfo = getDifficultyInfo(gameDifficulty);
+    const diffLabel = `${diffInfo.label}(難度${diffInfo.value})`;
+    const diffShort = diffInfo.label;
     const locationLabel = currentLocation ? currentLocation.name : "未指定海線";
     window.gameMeta = { locationLabel, diffLabel, diffShort };
     preGameMessage = `守護團集結！任務地點：${locationLabel}。難度：${diffLabel}。注意觀察大家的出牌...`;
@@ -1600,7 +1632,7 @@ function handleMazuAI(caller) {
 
         // 目標選擇：70% 送給手牌最少的人（多人並列時隨機選一位），30% 隨機送給任一人
         // 新手模式：AI 只能送給其他 AI，不能送給玩家
-        const isNovice = gameDifficulty <= 0.4;
+        const isNovice = gameDifficulty <= difficultyDB[0].value;
         const others = players.filter(p => p !== caller && (isNovice ? p.isAI : true));
 
         // 若新手模式下其他 AI 全空，fallback 到所有人（避免死鎖）
@@ -1686,6 +1718,9 @@ function showMazuTargetSelect(cardIdx) {
 // 媽祖贈牌：確認送出
 // 玩家確認媽祖贈牌對象後：把卡從玩家手牌移除、播放贈牌動畫、
 // 加入對方手牌、記錄行為勳章（mazuCompleted），最後進入結算流程。
+// ⚠️ 教學模式進行中時，tutorial.js 的 patchPlayerAction() 內部會暫時
+//    整個覆蓋這個 window.confirmMazuGift（monkey-patch），教學結束/
+//    離開媽祖籤流程後才會還原。修改此函式簽名時請同步檢查 tutorial.js。
 function confirmMazuGift(cardIdx, target) {
     const card = players[0].hand.splice(cardIdx, 1)[0];
 
@@ -1787,6 +1822,10 @@ function playCardFlyAnimation(card, fromEl, callback) {
  *     3. 隨機讓 1~2 位 AI 對這張牌做出反應（受每回合對話上限 roundChatCount 限制）
  *     4. 依序讓其餘所有 AI（非召喚者）跟牌出牌（aiMove），中間穿插延遲製造節奏感
  *     5. 全部出完後解鎖 UI 並呼叫 showResult() 進入結算判定
+ *
+ * ⚠️ 此函式會被 tutorial.js 的 patchPlayerAction() 整個攔截包裝
+ *    （monkey-patch，見 tutorial.js 對應區塊的警語）。若修改此函式的
+ *    名稱或參數簽名，務必同步檢查 tutorial.js。
  */
 async function playerAction(idx) {
     if (navigator.vibrate) navigator.vibrate(30);
@@ -2934,6 +2973,9 @@ function closeContact() {
         _pausedByUs.clear();
 
         // 2. 恢復 Web Audio
+        // 註：這裡呼叫 resume() 沒有 iOS 手勢限制的問題，因為 AudioContext
+        // 早在使用者一開始點擊進入遊戲時就已經被解鎖過一次了，這裡只是
+        // 從背景返回時恢復被系統自動 suspend 掉的狀態（詳見 sfx.js 檔頭）。
         try {
             if (window.SFX && typeof SFX.getCtx === 'function') {
                 var ctx = SFX.getCtx();

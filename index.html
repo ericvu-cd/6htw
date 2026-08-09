@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<script>
         (function() {
             var ua = navigator.userAgent;
@@ -14,7 +15,17 @@
             }
         })();
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<script>
+        /* 桌機/寬螢幕自動導向「手機外框」展示版（desktop.html），
+           手機直接開（寬度 <=700）完全不受影響、不會跳轉。 */
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var inIframe = (window.self !== window.top);
+            if (window.innerWidth > 700 && !inIframe && !params.has('embedded')) {
+                window.location.replace('desktop.html');
+            }
+        })();
+    </script>
     <title>海紋守護團 台灣海線任務</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="style.css">
@@ -93,6 +104,9 @@
     <div id="collection-btn" onclick="openCollection()" style="position:fixed; top:10px; left:50%; transform:translateX(-50%); z-index:2000; height:40px; padding:0 14px; background:rgba(0,105,148,0.9); border:1px solid rgba(255,255,255,0.2); border-radius:20px; display:none; justify-content:center; align-items:center; font-size:16px; font-weight:500; color:rgba(255,255,255,0.85); cursor:pointer; white-space:nowrap; letter-spacing:0.05em;">
         我的海紋收集
     </div>
+	<div id="leaderboard-control" onclick="openLeaderboard()" title="收集排行榜" style="position:fixed; top:10px; right:58px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; font-size:20px; cursor:pointer;">
+        🏆
+    </div>
 	<div id="report-control" onclick="toggleReportMode()" style="position:fixed; top:10px; right:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; font-size:20px; cursor:pointer;">
         📊
     </div>
@@ -115,7 +129,7 @@
         <div style="position:absolute; top:20px; right:20px; width:100%; display:flex; justify-content:right; gap:20px;">
             <button class="ctrl-btn" onclick="closeStory()">X</button>
         </div>
-        <div id="story-page-num" style="position:absolute; top:20px; left:20px; color:white; background:rgba(0,0,0,0.2); padding:5px 10px; border-radius:20px;">1 / 6</div>
+        <div id="story-page-num" style="position:absolute; top:20px; left:20px; color:white; background:rgba(0,0,0,0.2); padding:5px 10px; border-radius:20px;">1 / 9</div>
     </div>
 
 	<div id="contact-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.82); z-index:3000; align-items:center; justify-content:center; font-family:'Microsoft JhengHei','PingFang TC',sans-serif;">
@@ -148,6 +162,9 @@
             <button class="ctrl-btn" onclick="closeInfo()">X</button>
         </div>
         <div id="info-page-num" style="position:absolute; top:20px; left:20px; color:white; background:rgba(0,0,0,0.2); padding:5px 10px; border-radius:20px;">1 / 18</div>
+        <!-- 桌機展示版專用：沒有觸控滑動，加左右按鈕當替代操作，預設隱藏，只在 desktop-mode 顯示 -->
+        <button id="info-prev-btn" class="ctrl-btn desktop-only-btn" onclick="prevInfo()" style="position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:1.3rem; padding:8px 14px;">‹</button>
+        <button id="info-next-btn" class="ctrl-btn desktop-only-btn" onclick="nextInfo()" style="position:absolute; right:14px; top:50%; transform:translateY(-50%); font-size:1.3rem; padding:8px 14px;">›</button>
     </div>
 
     <div id="card-preview-overlay">
@@ -171,10 +188,12 @@
 
 		<div id="player-zone" style="position: relative; overflow: hidden;">
 			<div id="drawer-up-arrow" style="display:none;">▲ 上滑/左滑/右滑選牌</div>
-			<div id="arrow-left" class="hand-arrow"></div>
+			<div id="arrow-left" class="hand-arrow" onclick="scrollHand(-1)"></div>
 			<div id="player-hand" class="hand"></div>
-			<div id="arrow-right" class="hand-arrow"></div>
+			<div id="arrow-right" class="hand-arrow" onclick="scrollHand(1)"></div>
 		</div>
+
+    <!-- 排行榜（收集分數計算＋UI）現在併在 win-screen.js 裡了 -->
 
     <script src="sfx.js"></script>
     <script src="db.js"></script>

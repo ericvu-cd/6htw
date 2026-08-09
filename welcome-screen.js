@@ -19,7 +19,8 @@
             統一觸發「重新定位港口、啟動波浪動畫、抽當日天氣與封港事件」
 
    依賴：
-     db.js           — weatherDB、eventDB、locationDB（漁港顯示用的徽章/星等資訊另存於本檔 HARBOR_INFO）
+     db.js           — weatherDB、eventDB、locationDB（含漁港顯示用的 name/shortName/badge/stars，
+                       本檔 getHarborInfo() 即時從 locationDB 組出對應物件）
      weather-event.js — window.rollAndApplyWeather()（依天氣決定哪些漁港今日封港）
      main.js         — initGame()、openCollection()、gameDifficulty、sfxEnabled、showSummaryMode
    ══════════════════════════════════════════════════════════════════════ */
@@ -89,13 +90,46 @@
 		text-shadow: 0 0 12px rgba(80,180,255,0.65);
 	}
 
-	/* ── 海浪 canvas ── */
+	/* ── 海浪動畫層：純 CSS 動畫，取代原本 canvas + requestAnimationFrame 常駐迴圈。
+	   每顆波紋是一次性 DOM 元素，動 transform/opacity 交給合成器處理，
+	   動畫結束自動從 DOM 移除。畫面上唯一還在跑的 JS 只剩排程下一顆
+	   波紋的 setTimeout（約每 0.9~2 秒觸發一次），跟原本每秒 60 次、
+	   不管有沒有波紋都要重繪整個 canvas 的 rAF 迴圈完全不是同個量級。 */
 	#ws-waves {
 		position: absolute;
 		inset: 0;
 		width: 100%; height: 100%;
 		z-index: 2;
 		pointer-events: none;
+	}
+	.ws-ripple {
+		position: absolute;
+		left: 0; top: 0;
+		width: 4px; height: 4px;
+		margin-left: -2px; margin-top: -2px;
+		border: 1.2px solid rgba(140,210,255,.38);
+		border-radius: 50%;
+		pointer-events: none;
+		animation: wsRippleGo var(--dur) linear forwards;
+	}
+	/* 第二圈：比第一圈小、稍微慢半拍出現，模擬原本 canvas 版的雙圈漣漪視覺 */
+	.ws-ripple::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: .8px solid rgba(180,230,255,.22);
+		border-radius: 50%;
+		opacity: 0;
+		animation: wsRippleGo2 var(--dur) linear forwards;
+		animation-delay: calc(var(--dur) * .18);
+	}
+	@keyframes wsRippleGo {
+		from { transform: scale(1);           opacity: .38; }
+		to   { transform: scale(var(--scale)); opacity: 0;  }
+	}
+	@keyframes wsRippleGo2 {
+		0%   { transform: scale(.82); opacity: .22; }
+		100% { transform: scale(var(--scale)); opacity: 0; }
 	}
 
 	#ws-top-icons {
@@ -117,6 +151,25 @@
 	}
 	.ws-icon-btn:active { transform: scale(0.92); }
 	.ws-icon-btn.ws-off { opacity: 0.45; }
+
+	/* ── 排行榜按鈕（查詢性質，藥丸型，跟開關類的 .ws-icon-btn 區隔）── */
+	#ws-lb-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 5px 12px;
+		border-radius: 20px;
+		border: 1px solid rgba(80,160,220,0.3);
+		background: rgba(8,22,45,0.75);
+		font-size: 0.78rem;
+		color: #d0eaff;
+		cursor: pointer;
+		margin-left: 10px;
+		white-space: nowrap;
+		-webkit-tap-highlight-color: transparent;
+		transition: background .18s, transform .12s;
+	}
+	#ws-lb-btn:active { transform: scale(0.95); }
 
 	/* ── Toast 提示 ── */
 	#ws-toast {
@@ -513,6 +566,137 @@
 		pointer-events: none;
 		line-height: 1;
 	}
+
+	/* ── 天氣特效層（一次性播放，不循環）──
+	   進入 welcome-screen 5 秒後依當日天氣播放一次，播完就停在最終狀態
+	   （環境層如陽光/霧）或自行消失（粒子如雨滴/風線/星光），
+	   完全沒有 infinite 動畫、沒有 JS 計時迴圈，播放完之後畫面上不再有
+	   任何東西在動、也不再耗任何運算資源。 */
+	#ws-weather-fx {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		overflow: hidden;
+		pointer-events: none;
+	}
+	/* 晴空萬里：右上角光冕（corona），不是單純一塊漸層色斑。
+	   由三層組成：
+	     1. .wsfx-sun-glow  —— 核心亮點 + repeating-conic-gradient 做出放射狀光紋，
+	        再用 radial mask 把邊緣暈開，看起來像太陽本體發光，而不是一片糊掉的色塊。
+	     2. .wsfx-sun-beam（JS 動態生成 N 條）—— 從同一個錨點，各自往畫面內
+	        延伸出去的細長光柱，用 scaleX 從錨點「長出來」的動畫，才有光線
+	        灑落進畫面的方向感；光冕本體只負責太陽本身，光柱負責「照進來」的感覺。
+	   兩者共用同一個錨點座標 (left:92%, top:8%)，靠 transform:translate(-50%,-50%)
+	   對齊圓心，JS 端生成光柱時角度、位置也要用同一組錨點座標。 */
+	@keyframes wsfxSunIn { from { opacity: 0; } to { opacity: 1; } }
+	.wsfx-sun-glow {
+		position: absolute;
+		left: 92%; top: 8%;
+		width: 68vmin; height: 68vmin;
+		transform: translate(-50%, -50%);
+		border-radius: 50%;
+		background:
+			radial-gradient(circle, rgba(255,253,242,1) 0%, rgba(255,241,198,.9) 9%, rgba(255,235,180,.4) 26%, rgba(255,235,180,0) 55%),
+			repeating-conic-gradient(rgba(255,248,218,.5) 0deg 3deg, rgba(255,248,218,0) 3deg 15deg);
+		-webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 66%);
+		        mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 66%);
+		opacity: 0;
+		animation: wsfxSunIn 2.6s ease-out forwards;
+	}
+	/* 光柱：從太陽錨點沿 var(--angle) 方向，用 scaleX 從錨點「長出來」，
+	   transform-origin 固定在左邊（錨點那一端），才會是「從那一點放射出去」
+	   而不是整條線原地放大。 */
+	@keyframes wsfxBeamIn {
+		from { opacity: 0;   transform: rotate(var(--angle)) scaleX(.25); }
+		60%  { opacity: .75; }
+		to   { opacity: .55; transform: rotate(var(--angle)) scaleX(1);   }
+	}
+	.wsfx-sun-beam {
+		position: absolute;
+		left: 92%; top: 8%;
+		width: 58vmin; height: 3px;
+		transform-origin: left center;
+		transform: rotate(var(--angle)) scaleX(.25);
+		background: linear-gradient(90deg, rgba(255,247,214,.65), rgba(255,247,214,0) 85%);
+		opacity: 0;
+		animation: wsfxBeamIn 2.4s cubic-bezier(.2,.7,.3,1) forwards;
+		animation-delay: var(--delay, 0s);
+	}
+	/* 星光粒子：閃一下就消失（sunny 專用，集中在太陽附近，像被照到反光） */
+	@keyframes wsfxTwinkle {
+		0%   { opacity: 0; transform: scale(.4); }
+		40%  { opacity: 1; transform: scale(1);  }
+		100% { opacity: 0; transform: scale(.8); }
+	}
+	.wsfx-sparkle {
+		position: absolute;
+		width: 3px; height: 3px;
+		border-radius: 50%;
+		background: #fff8d8;
+		box-shadow: 0 0 6px 1px rgba(255,240,180,.9);
+		left: var(--x); top: var(--y);
+		opacity: 0;
+		animation: wsfxTwinkle 1.6s ease-in-out forwards;
+		animation-delay: var(--delay, 0s);
+	}
+	/* 季風／颱風共用：一次橫掃過畫面就消失。
+	   改版重點：原本只是一條純水平的細線，看起來像刮痕不像風，
+	   現在用 ::before/::after 疊出「兩條前後錯開、頭粗尾細」的風切線
+	   （靠 linear-gradient 做漸層代替真的錐形），移動路徑也不是死板直線，
+	   中段會有一點上下擺動（wsfxWindSwoosh 的 35%/65% 那兩個關鍵影格），
+	   看起來更像一陣風掃過去，而不是一條線平移。 */
+	@keyframes wsfxWindSwoosh {
+		0%   { transform: translate(0, 0);       opacity: 0;   }
+		12%  { opacity: .85; }
+		35%  { transform: translate(180%, -6%); }
+		65%  { transform: translate(380%, 5%);  }
+		85%  { opacity: .8; }
+		100% { transform: translate(620%, -3%);  opacity: 0;   }
+	}
+	.wsfx-wind {
+		position: absolute;
+		left: -20%; top: var(--y);
+		width: 15vmin; height: 8px;
+		opacity: 0;
+		animation: wsfxWindSwoosh var(--dur, 1.4s) ease-in-out forwards;
+		animation-delay: var(--delay, 0s);
+	}
+	.wsfx-wind::before,
+	.wsfx-wind::after {
+		content: '';
+		position: absolute;
+		left: 0; right: 0;
+		height: 1.6px;
+		border-radius: 999px;
+		background: linear-gradient(90deg, transparent, rgba(215,238,255,.9) 55%, rgba(215,238,255,.15));
+	}
+	.wsfx-wind::before { top: 0; }
+	.wsfx-wind::after   { top: 5px; width: 70%; opacity: .75; }
+	/* 海霧瀰漫：整層白霧淡入後停留 */
+	@keyframes wsfxFogIn { from { opacity: 0; } to { opacity: .55; } }
+	.wsfx-fog {
+		position: absolute;
+		inset: 0;
+		background: rgba(225,232,240,.85);
+		opacity: 0;
+		animation: wsfxFogIn 4s ease-out forwards;
+	}
+	/* 暴雨／颱風共用：雨滴一次落下就消失 */
+	@keyframes wsfxRainFall {
+		0%   { transform: translateY(0);      opacity: 0;  }
+		10%  { opacity: .8; }
+		88%  { opacity: .8; }
+		100% { transform: translateY(120vh);  opacity: 0;  }
+	}
+	.wsfx-rain-drop {
+		position: absolute;
+		top: -8%; left: var(--x);
+		width: 1.5px; height: 16px;
+		background: linear-gradient(rgba(190,215,255,.8), transparent);
+		opacity: 0;
+		animation: wsfxRainFall var(--dur, 1.1s) linear forwards;
+		animation-delay: var(--delay, 0s);
+	}
 	`;
 	document.head.appendChild(_style);
 
@@ -526,13 +710,17 @@
 			<img src="image/tw.png" alt="台灣地圖" draggable="false">
 		</div>
 
-		<!-- ── 海浪動畫層 ── -->
-		<canvas id="ws-waves"></canvas>
+		<!-- ── 海浪動畫層（純 CSS 動畫的一次性波紋元素，不用 canvas + rAF 常駐迴圈） ── -->
+		<div id="ws-waves"></div>
+
+		<!-- ── 天氣特效層：進入畫面 5 秒後依當日天氣播放一次性效果，不循環 ── -->
+		<div id="ws-weather-fx"></div>
 
 		<!-- ── 頂部列 ── -->
 		<div id="ws-topbar">
 			<div id="ws-top-title">
 				<div id="ws-title-text">台灣海線任務</div>
+				<div id="ws-lb-btn" onclick="openLeaderboard()" title="守護排行榜">🏆 排行榜</div>
 			</div>
 			<div id="ws-top-icons">
 				<div class="ws-icon-btn" id="ws-sfx-btn" onclick="wsToggleSound()" title="音效・音樂">🔊</div>
@@ -595,11 +783,9 @@
 				<div id="ws-panel-harbor-name"></div>
 				<div id="ws-panel-badge"></div>
 				<div class="ws-panel-label">難度選擇</div>
-				<div class="ws-diff-row">
-					<button class="ws-diff-btn ws-active" onclick="wsSetDiff(0.4,this)">新手</button>
-					<button class="ws-diff-btn" onclick="wsSetDiff(0.7,this)">標準</button>
-					<button class="ws-diff-btn" onclick="wsSetDiff(0.9,this)">專業</button>
-				</div>
+				<!-- 按鈕內容由 renderDiffButtons() 依 db.js 的 difficultyDB 動態產生，
+				     不在這裡寫死，此時 db.js 可能還沒載入完成（見檔頭 script 載入順序說明） -->
+				<div class="ws-diff-row" id="ws-diff-row"></div>
 				<button id="ws-start-btn" onclick="wsStartGame()">⚓ 守護漁港</button>
 			</div>
 		</div>
@@ -686,18 +872,21 @@
 		return out;
 	}
 
-	/* 徽章資料（配合 db.js locationDB） */
-	var HARBOR_INFO = {
-		badouzi:  { name:'基隆八斗子漁港', shortName:'八斗子漁港', badge:'北岬海紋章', stars:'★★★★'   },
-		nanfangao:{ name:'宜蘭南方澳漁港', shortName:'南方澳漁港', badge:'洄光海紋章', stars:'★★★★★'  },
-		longfeng: { name:'苗栗龍鳳漁港',   shortName:'龍鳳漁港',   badge:'龍鳳初航章', stars:'★★★'     },
-		wuqi:     { name:'台中梧棲漁港',   shortName:'梧棲漁港',   badge:'中港豐海章', stars:'★'        },
-		anping:   { name:'台南安平漁港',   shortName:'安平漁港',   badge:'安平豐海章', stars:'★★'       },
-		donggang: { name:'屏東東港漁港',   shortName:'東港漁港',   badge:'黑潮守護章', stars:'★★★★'   },
-	};
+	/* 漁港顯示資訊（name/shortName/badge/stars 現在都存在 db.js 的 locationDB 裡，
+	   這裡只是即時組出一份「用 id 查」的物件，不再另外寫死一份名稱/徽章副本。
+	   跟 getHarbors() 一樣是「呼叫當下」才讀 locationDB，不是在本檔案載入時
+	   的最上層就組好，避免 locationDB 還沒定義（見檔頭 script 載入順序說明）。 */
+	function getHarborInfo(){
+		var out = {};
+		(typeof locationDB !== 'undefined' ? locationDB : []).forEach(function(loc){
+			out[loc.id] = { name: loc.name, shortName: loc.shortName, badge: loc.badge, stars: loc.stars };
+		});
+		return out;
+	}
 
-	/* 暴露給 weather-event.js 使用 */
-	window.HARBOR_INFO = HARBOR_INFO;
+	/* 暴露給 weather-event.js 使用（改成暴露函式，而不是暴露一份靜態物件，
+	   確保 weather-event.js 呼叫當下永遠拿到跟 locationDB 同步的最新資料） */
+	window.getHarborInfo = getHarborInfo;
 
 	/* ── 取得 tw.png 在螢幕上的實際渲染矩形 ──
 	   img 是 object-fit:cover / object-position:center top
@@ -793,7 +982,7 @@
 
 	/**
 	 * 玩家點擊地圖上某個漁港氣泡時呼叫。
-	 * @param {string} id 漁港代碼（對應 HARBORS / HARBOR_INFO 的 key）
+	 * @param {string} id 漁港代碼（對應 locationDB 每筆的 id，getHarborInfo() 的 key）
 	 * 流程：若該港今日已被天氣／事件關閉則彈出原因提示並中止；
 	 * 否則切換選中樣式、更新右下角資訊面板內容、把小船移動過去。
 	 */
@@ -825,7 +1014,7 @@
 		sessionStorage.setItem('selectedLocationId', id);
 
 		/* 更新面板 */
-		var info = HARBOR_INFO[id] || {};
+		var info = getHarborInfo()[id] || {};
 		document.getElementById('ws-panel-harbor-name').innerHTML = (info.name || id) + ' <span class="ws-stars">' + (info.stars || '') + '</span>';
 		document.getElementById('ws-panel-badge').textContent = '🏅 ' + (info.badge || '');
 		document.getElementById('ws-panel-hint').style.display    = 'none';
@@ -912,6 +1101,23 @@
 			.forEach(function(b){ b.classList.remove('ws-active'); });
 		btn.classList.add('ws-active');
 	};
+
+	/* ── 依 db.js 的 difficultyDB 動態產生難度按鈕 ──
+	   本檔案在 index.html 裡排在 db.js 之前載入，所以不能在頂層直接讀
+	   difficultyDB；跟 positionHarbors()／rollAndApplyWeather() 一樣，
+	   這個函式只在被「呼叫」的當下才去讀 difficultyDB（有 typeof 防呆），
+	   實際呼叫時機見下方 MutationObserver 與頁面載入檢查。
+	   之後要調整難度數值/名稱/預設難度，只需改 db.js 的 difficultyDB，
+	   不用再回來改這裡的按鈕 HTML。 */
+	function renderDiffButtons(){
+		var row = document.getElementById('ws-diff-row');
+		if(!row || typeof difficultyDB === 'undefined') return;
+		if(row.childElementCount) return; /* 已經產生過，不重複建立 */
+		row.innerHTML = difficultyDB.map(function(d, i){
+			return '<button class="ws-diff-btn' + (i === 0 ? ' ws-active' : '') + '" ' +
+				'onclick="wsSetDiff(' + d.value + ',this)">' + d.label + '</button>';
+		}).join('');
+	}
 
 	/* ── 音效・音樂 ──
 	   歡迎頁本身沒有背景音樂，開關只儲存狀態，
@@ -1060,14 +1266,16 @@
 		}
 	};
 
-	/* ── 海浪動畫（canvas，台灣島周邊偶發波紋） ── */
+	/* ── 海浪動畫（台灣島周邊偶發波紋）：純 CSS 動畫版 ──
+	   原本是 canvas + requestAnimationFrame，就算畫面上沒有任何波紋，
+	   也會無條件每秒重繪 60 次；改成每顆波紋是獨立的一次性 DOM 元素，
+	   動 transform/opacity 交給合成器處理，動畫結束用 animationend 自動
+	   移除自己。啟動期間唯一還在跑的 JS 只剩 scheduleRipple() 自我重排的
+	   setTimeout（約每 0.9~2 秒觸發一次），成本跟原本 60fps 的重繪迴圈
+	   不是同個量級，但嚴格說並不是「完全沒有計時器在跑」。 */
 	(function(){
-		var cv  = document.getElementById('ws-waves');
-		if(!cv) return;
-		var ctx = cv.getContext('2d');
-
-		/* 波紋物件池 */
-		var ripples = [];
+		var layer = document.getElementById('ws-waves');
+		if(!layer) return;
 
 		/* tw.png 在畫面上的島嶼邊界（近似橢圓，由 getImgRect 換算）
 		   島嶼在原圖中：cx≈50%, cy≈50%, rx≈38%, ry≈40%
@@ -1088,82 +1296,45 @@
 			};
 		}
 
-		// 在 randIslandEdge() 算出的隨機島嶼邊緣座標上，新增一個半徑會逐漸放大、透明度逐漸降低的波紋物件。
+		/* 在 randIslandEdge() 算出的隨機島嶼邊緣座標上，插入一個一次性的波紋 <div>；
+		   maxR／speed 沿用原本 canvas 版的手感，換算成 CSS 動畫的 scale／秒數。
+		   動畫播完（animationend）就自己從 DOM 移除，不需要額外的物件池或計時器管理。 */
 		function addRipple(){
 			var pt = randIslandEdge();
 			if(!pt) return;
-			ripples.push({
-				x: pt.x, y: pt.y,
-				r: 0,
-				maxR: 28 + Math.random() * 22,
-				life: 0,          /* 0~1 */
-				speed: 0.006 + Math.random() * 0.005,
-			});
+
+			var maxR  = 28 + Math.random() * 22;      /* 最終半徑（px），沿用原本範圍 */
+			var speed = 0.006 + Math.random() * 0.005; /* 原本 life 每幀增量 */
+			var dur   = (1 / speed / 60).toFixed(2) + 's'; /* 換算成秒數：life 從 0→1 要跑幾秒 */
+
+			var el = document.createElement('div');
+			el.className = 'ws-ripple';
+			el.style.left = pt.x + 'px';
+			el.style.top  = pt.y + 'px';
+			/* 初始圓點基準半徑 2px（CSS 裡 width:4px），scale 到 maxR 需要放大的倍率 */
+			el.style.setProperty('--scale', (maxR / 2).toFixed(2));
+			el.style.setProperty('--dur', dur);
+
+			el.addEventListener('animationend', function(){ el.remove(); }, { once: true });
+			layer.appendChild(el);
 		}
 
-		/* 每隔 0.9~2s 隨機加一個波紋（原 1.8~4s，頻率 200%） */
+		/* 每隔 0.9~2s 隨機加一個波紋 */
+		var _scheduleTimer = null;
 		function scheduleRipple(){
 			addRipple();
-			setTimeout(scheduleRipple, 900 + Math.random() * 1100);
-		}
-
-		function resize(){
-			cv.width  = window.innerWidth;
-			cv.height = window.innerHeight;
-		}
-		resize();
-		window.addEventListener('resize', resize);
-
-		var _rafId;
-		/**
-		 * 波紋動畫主迴圈（requestAnimationFrame 持續呼叫）：
-		 * 每顆波紋依 life（0~1 進度）畫出一圈逐漸放大、逐漸透明的圓圈，
-		 * 進度過 0.2 後會疊加畫第二圈（半徑、出現時機都稍微落後第一圈），
-		 * 製造出雙圈漣漪的視覺效果；life 到 1 或完全透明就從陣列移除。
-		 */
-		function draw(){
-			ctx.clearRect(0, 0, cv.width, cv.height);
-			for(var i = ripples.length - 1; i >= 0; i--){
-				var rp = ripples[i];
-				rp.life += rp.speed;
-				rp.r = rp.maxR * rp.life;
-				var alpha = (1 - rp.life) * 0.38;
-				if(alpha <= 0 || rp.life >= 1){
-					ripples.splice(i, 1);
-					continue;
-				}
-				ctx.beginPath();
-				ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
-				ctx.strokeStyle = 'rgba(140,210,255,' + alpha.toFixed(3) + ')';
-				ctx.lineWidth = 1.2;
-				ctx.stroke();
-
-				/* 第二圈（比第一圈小、稍微慢半拍） */
-				if(rp.life > 0.2){
-					var r2    = rp.maxR * (rp.life - 0.18);
-					var a2    = (1 - (rp.life - 0.18)) * 0.22;
-					if(r2 > 0 && a2 > 0){
-						ctx.beginPath();
-						ctx.arc(rp.x, rp.y, r2, 0, Math.PI * 2);
-						ctx.strokeStyle = 'rgba(180,230,255,' + a2.toFixed(3) + ')';
-						ctx.lineWidth = 0.8;
-						ctx.stroke();
-					}
-				}
-			}
-			_rafId = requestAnimationFrame(draw);
+			_scheduleTimer = setTimeout(scheduleRipple, 900 + Math.random() * 1100);
 		}
 
 		/* 只在 welcome-screen 可見時跑動畫 */
 		function startWaves(){
-			if(_rafId) return;
+			if(_scheduleTimer) return; /* 已經在跑，避免重複排程 */
 			scheduleRipple();
-			draw();
 		}
 		function stopWaves(){
-			cancelAnimationFrame(_rafId);
-			_rafId = null;
-			ripples = [];
+			clearTimeout(_scheduleTimer);
+			_scheduleTimer = null;
+			layer.innerHTML = ''; /* 清掉畫面上還沒播完的波紋 */
 		}
 
 		/* 把波浪的 start/stop 暴露給外層統一的 MutationObserver 呼叫 */
@@ -1177,6 +1348,30 @@
 	   監看它的 style/class 屬性變化，一旦偵測到「變成可見」就統一處理：
 	   重新定位漁港座標（畫面尺寸可能已變）、啟動海浪動畫、重新抽一次當日天氣與封港事件。 */
 	var _wsEl = document.getElementById('welcome-screen');
+
+	/* 天氣特效：進入畫面 5 秒後播放一次（不循環），依 rollAndApplyWeather()
+	   算出的當日天氣呼叫 weather-event.js 的 window.playWeatherFx()。
+	   離開畫面（或還沒到 5 秒又被切走）要記得取消，避免玩家已經不在
+	   welcome-screen 了，畫面外突然冒出一次天氣特效。 */
+	var _wsFxTimer = null;
+	function scheduleWeatherFx(){
+		clearTimeout(_wsFxTimer);
+		_wsFxTimer = setTimeout(function(){
+			_wsFxTimer = null;
+			// 保險：計時器觸發當下再確認畫面還可見、天氣結果還在，避免競態情況播錯時機
+			var stillVisible = _wsEl && _wsEl.style.display !== 'none' && _wsEl.style.display !== '';
+			if(stillVisible && window._wsWeatherResult && typeof window.playWeatherFx === 'function'){
+				window.playWeatherFx(window._wsWeatherResult.weather.id);
+			}
+		}, 5000);
+	}
+	function cancelWeatherFx(){
+		clearTimeout(_wsFxTimer);
+		_wsFxTimer = null;
+		var fxEl = document.getElementById('ws-weather-fx');
+		if(fxEl) fxEl.innerHTML = ''; // 清掉播到一半、還沒 forwards 定格完的殘留元素
+	}
+
 	if(_wsEl){
 		// 用「上升緣」偵測（從不可見 → 可見的那一刻才動作），
 		// 而不是「只要目前可見，任何 style 屬性變動都算一次」。
@@ -1193,9 +1388,12 @@
 				setTimeout(positionHarbors, 50);
 				setTimeout(positionHarbors, 200);
 				if(window._wsStartWaves) window._wsStartWaves();
+				renderDiffButtons();
 				if(typeof window.rollAndApplyWeather === 'function') window.rollAndApplyWeather();
+				scheduleWeatherFx();
 			} else if(!visible && _wsWasVisible){
 				if(window._wsStopWaves) window._wsStopWaves();
+				cancelWeatherFx();
 			}
 			_wsWasVisible = visible;
 		}).observe(_wsEl, { attributes:true, attributeFilter:['style','class'] });
@@ -1203,7 +1401,14 @@
 
 	/* 頁面首次載入時，若 welcome-screen 一開始就是可見狀態，也要抽一次 */
 	if(_wsEl && _wsEl.style.display !== 'none' && _wsEl.style.display !== ''){
+		renderDiffButtons();
 		if(typeof window.rollAndApplyWeather === 'function') window.rollAndApplyWeather();
+		scheduleWeatherFx();
 	}
+
+	/* 保險：跟 positionHarbors() 一樣多補幾次延遲呼叫，應對 db.js 載入時機
+	   跟 welcome-screen 顯示時機交錯的各種情況（typeof 防呆，重複呼叫也安全） */
+	setTimeout(renderDiffButtons, 100);
+	setTimeout(renderDiffButtons, 400);
 
 })();

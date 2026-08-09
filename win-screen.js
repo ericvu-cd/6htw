@@ -5,10 +5,13 @@
 function showWinScreen(winner) {
     const isPlayer = !winner.isAI;
 
-    // ── 勝利時解鎖難度章 ──
+    // ── 勝利時解鎖難度章 + 累積獲勝次數 ──
+    // 難度標籤改查 db.js 的 difficultyDB（getDifficultyInfo()），
+    // 不再用 gameDifficulty <= 0.4 這種門檻硬判斷。
     if (isPlayer) {
-        const diffLabelShort = gameDifficulty <= 0.4 ? "新手" : gameDifficulty >= 0.9 ? "專業" : "標準";
+        const diffLabelShort = getDifficultyInfo(gameDifficulty).label;
         progress.unlockDifficulty(window.playerName, diffLabelShort);
+        progress.recordWin(window.playerName, diffLabelShort);
     }
 
     // ── 行為型勳章判斷，追蹤本局新解鎖 ──
@@ -56,7 +59,7 @@ function showWinScreen(winner) {
     // 寫入初始手牌快照 → 組成「🏆本局結果」總結段落
     if (typeof initialHands !== "undefined" && initialHands.length > 0) {
         const meta = (typeof window !== "undefined" && window.gameMeta) ? window.gameMeta : {};
-        const diffShort = meta.diffShort || (gameDifficulty <= 0.4 ? "新手" : gameDifficulty >= 0.9 ? "專業" : "標準");
+        const diffShort = meta.diffShort || getDifficultyInfo(gameDifficulty).label;
         gameEndSummary = {
             location: meta.locationLabel || "未指定海線",
             diffText: `${diffShort}（${gameDifficulty}）`,
@@ -489,16 +492,17 @@ function _restartGame(winBgm, gameBgm, particleTimer) {
 // 📤 分享勳章成就卡片
 // =============================================
 
-const BADGE_META_SHARE = {
-    "綠燈先鋒":"🟢","一支釣達人":"🎣","完美永續局":"🏆",
-    "紅燈護送員":"🔴","養殖支持者":"🌾","深海傳說":"🐋",
-    "浴火重生":"🔄","百發百中":"💯","海紋守護王":"👑",
-    "珊瑚守護者":"🪸","漁法通":"🎯","近海英雄":"🌏"
-};
+// 依勳章 key 查 db.js BEHAVIOR_BADGE_DB 的 icon（原本這裡另外寫死一份 BADGE_META_SHARE，
+// 跟 main.js openCollection() 用的圖示是同一份資料，現在統一從 db.js 查，不用維護兩份）
+function _badgeIcon(badgeKey) {
+    if (typeof BEHAVIOR_BADGE_DB === "undefined") return "⭐";
+    const b = BEHAVIOR_BADGE_DB.find(function (x) { return x.key === badgeKey; });
+    return (b && b.icon) ? b.icon : "⭐";
+}
 
 async function shareAchievementCard(isPlayer, winner, badgeKey) {
-    const icon = BADGE_META_SHARE[badgeKey] || "⭐";
-    const diffLabel = gameDifficulty <= 0.4 ? "新手" : gameDifficulty >= 0.9 ? "專業" : "標準";
+    const icon = _badgeIcon(badgeKey);
+    const diffLabel = getDifficultyInfo(gameDifficulty).label;
 
     const W = 390, H = 693;
     const canvas = document.createElement("canvas");
@@ -610,7 +614,7 @@ async function shareAchievementCard(isPlayer, winner, badgeKey) {
 // =============================================
 
 async function shareGameCard(isPlayer, winner) {
-    const diffLabel = gameDifficulty <= 0.4 ? "新手" : gameDifficulty >= 0.9 ? "專業" : "標準";
+    const diffLabel = getDifficultyInfo(gameDifficulty).label;
     const rounds = typeof roundCount !== "undefined" ? roundCount : 0;
 
     const W = 390, H = 693;
@@ -710,3 +714,170 @@ function fallbackDownload(canvas, name = "海紋守護團") {
     a.download = name + ".png";
     a.click();
 }
+
+/* ═════════════════════════════════════════════════════════════
+   排行榜：收集分數（本機版，暫不連 Firebase）
+   ─────────────────────────────────────────────────────────────
+   資料完全來自 localStorage（progress_暱稱），不用另外存、不用上傳，
+   打開排行榜時直接掃描同一台裝置上玩過的所有暱稱、即時算分排序。
+   之後想接雲端同步，只要把 computeCollectionStats() 算出來的東西
+   寫進 Firestore 就行，這支檔案的算分邏輯不用重寫。
+
+   每一項收集到的東西分數「不是」在這裡算出來的，全部改成直接讀取
+   db.js 裡寫死的分數欄位／常數。想調整任何一項的分數，去改 db.js
+   即可，這支檔案不用動：
+
+   ┌─────────┬──────────────────────────────────────────────┐
+   │ 魚圖鑑   │ db.js fishDB 每筆的 score 欄位                  │
+   │ 同伴角色 │ db.js characterDB 每筆的 score 欄位             │
+   │ 難度章   │ db.js difficultyDB 每筆的 scoreBadge 欄位       │
+   │          │ （DIFFICULTY_SCORES 是從它自動產生的相容查表）  │
+   │ 行為勳章 │ db.js BEHAVIOR_BADGE_DB 每筆的 score 欄位       │
+   │          │ （BEHAVIOR_BADGE_SCORES 是從它自動產生的相容查表）│
+   │ 漁港徽章 │ db.js locationDB 每筆的 badgeScore 欄位         │
+   │ 勝場加成 │ db.js difficultyDB 每筆的 winBonus 欄位（次數 × │
+   │          │ 每勝分數，會累加；WIN_BONUS_SCORE 是相容查表）  │
+   └─────────┴──────────────────────────────────────────────┘
+
+   總分沒有上限，就是把玩家實際擁有的所有項目分數加總。
+   ═════════════════════════════════════════════════════════════ */
+
+// 依魚名查 db.js fishDB 裡寫死的 score 欄位
+function _fishScore(fishName) {
+    if (typeof fishDB === "undefined") return 0;
+    const fish = fishDB.find(function (f) { return f.n === fishName; });
+    return (fish && fish.score != null) ? fish.score : 0;
+}
+
+// 依漁港徽章名稱查 db.js locationDB 裡寫死的 badgeScore 欄位
+function _harborScore(badgeName) {
+    if (typeof locationDB === "undefined") return 0;
+    const loc = locationDB.find(function (l) { return l.badge === badgeName; });
+    return (loc && loc.badgeScore != null) ? loc.badgeScore : 0;
+}
+
+// 依同伴角色名稱查 db.js characterDB 裡寫死的 score 欄位
+function _companionScore(companionName) {
+    if (typeof characterDB === "undefined") return 0;
+    const char = characterDB.find(function (c) { return c.n === companionName; });
+    return (char && char.score != null) ? char.score : 0;
+}
+
+// 依難度標籤查 db.js DIFFICULTY_SCORES
+function _difficultyScore(label) {
+    if (typeof DIFFICULTY_SCORES === "undefined") return 0;
+    return DIFFICULTY_SCORES[label] || 0;
+}
+
+/* ── 計算某玩家目前的收集分數與完整度 ── */
+function computeCollectionStats(name) {
+    const data = (typeof progress !== "undefined") ? progress.load(name) : null;
+
+    const behaviorScores = (typeof BEHAVIOR_BADGE_SCORES !== "undefined") ? BEHAVIOR_BADGE_SCORES : {};
+    const winBonus        = (typeof WIN_BONUS_SCORE !== "undefined") ? WIN_BONUS_SCORE : {};
+
+    const fishList       = (data && data.fish) ? data.fish : [];
+    const behaviorList    = (data && data.behaviorBadges) ? data.behaviorBadges : [];
+    const harborList      = (data && data.badges) ? data.badges : [];
+    const companionList   = (data && data.companions) ? data.companions : [];
+    const difficultyList  = (data && data.difficulty) ? data.difficulty : [];
+    const winCounts        = (data && data.winCounts) ? data.winCounts : {};
+
+    const fishScore       = fishList.reduce(function (s, n) { return s + _fishScore(n); }, 0);
+    const behaviorScore   = behaviorList.reduce(function (s, n) { return s + (behaviorScores[n] || 0); }, 0);
+    const harborScore     = harborList.reduce(function (s, n) { return s + _harborScore(n); }, 0);
+    const companionScore  = companionList.reduce(function (s, n) { return s + _companionScore(n); }, 0);
+    const difficultyScore = difficultyList.reduce(function (s, n) { return s + _difficultyScore(n); }, 0);
+    const winScore        = Object.keys(winCounts).reduce(function (s, label) {
+        return s + winCounts[label] * (winBonus[label] || 0);
+    }, 0);
+
+    const totalScore = fishScore + behaviorScore + harborScore + companionScore + difficultyScore + winScore;
+
+    const fishMax     = (typeof fishDB !== "undefined") ? fishDB.length : 48;
+    const harborMax    = (typeof locationDB !== "undefined") ? locationDB.length : 6;
+    const companionMax = (typeof characterDB !== "undefined") ? characterDB.length : 6;
+    const behaviorMax  = (typeof BEHAVIOR_BADGE_DB !== "undefined") ? BEHAVIOR_BADGE_DB.length : Object.keys(behaviorScores).length;
+    const difficultyMax = (typeof difficultyDB !== "undefined") ? difficultyDB.length : 3;
+
+    const totalCount    = fishList.length + behaviorList.length + harborList.length + companionList.length + difficultyList.length;
+    const totalCountMax = fishMax + behaviorMax + harborMax + companionMax + difficultyMax;
+
+    return {
+        fishScore, behaviorScore, harborScore, companionScore, difficultyScore, winScore, totalScore,
+        totalCount, totalCountMax
+    };
+}
+
+/* ── 掃描本機所有玩過的暱稱，算分排序 ──
+   localStorage 裡每個 progress_XXX 的 key，XXX 就是暱稱。 */
+function getLocalLeaderboard() {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || key.indexOf("progress_") !== 0) continue;
+        const nickname = key.slice("progress_".length);
+        if (!nickname || nickname === "守護員") continue;
+        const stats = computeCollectionStats(nickname);
+        if (stats.totalCount <= 0) continue;
+        rows.push(Object.assign({ nickname: nickname }, stats));
+    }
+    rows.sort(function (a, b) { return b.totalScore - a.totalScore; });
+    return rows;
+}
+
+function _escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+}
+
+/* ── 排行榜彈窗 ── */
+function openLeaderboard() {
+    let overlay = document.getElementById("leaderboard-overlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "leaderboard-overlay";
+        overlay.style.cssText = "display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.82); z-index:3000; align-items:center; justify-content:center; font-family:'Microsoft JhengHei','PingFang TC',sans-serif;";
+        overlay.innerHTML =
+            '<div style="width:88%;max-width:380px;max-height:78vh;overflow-y:auto;background:rgba(8,20,14,.96);border:1px solid rgba(100,200,150,.28);border-radius:20px;padding:26px 22px 22px;position:relative;">' +
+                '<button onclick="closeLeaderboard()" style="position:absolute;top:14px;right:16px;background:none;border:none;cursor:pointer;font-size:20px;color:rgba(200,240,220,.55);">✕</button>' +
+                '<div style="font-size:1.1rem;font-weight:900;color:rgba(200,245,220,.9);letter-spacing:1px;margin-bottom:2px;">🏆 守護排行榜</div>' +
+                '<div style="font-size:11px;color:rgba(160,210,180,.55);margin-bottom:16px;">本機紀錄（同裝置玩過的暱稱），依收集分數排序</div>' +
+                '<div id="leaderboard-list" style="font-size:14px;color:rgba(220,245,230,.9);">載入中…</div>' +
+            "</div>";
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = "flex";
+
+    const list = document.getElementById("leaderboard-list");
+    const rows = getLocalLeaderboard();
+    if (!rows.length) {
+        list.textContent = "目前還沒有紀錄，快去解鎖第一個成就！";
+        return;
+    }
+    const myName = (window.playerName || "").trim();
+    list.innerHTML = rows.map(function (r, i) {
+        const mine = r.nickname === myName;
+        return '<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,.08);' +
+               (mine ? ' color:#ffd54a; font-weight:700;' : '') + '">' +
+                    '<div style="display:flex; justify-content:space-between;">' +
+                        '<span>' + (i + 1) + '. ' + _escapeHtml(r.nickname) + (mine ? '（你）' : '') + '</span>' +
+                        '<span>' + r.totalScore + ' 分</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px; color:rgba(200,230,215,.55); margin-top:2px;">' +
+                        '收集 ' + r.totalCount + '/' + r.totalCountMax +
+                    '</div>' +
+               '</div>';
+    }).join("");
+}
+
+function closeLeaderboard() {
+    const overlay = document.getElementById("leaderboard-overlay");
+    if (overlay) overlay.style.display = "none";
+}
+
+window.computeCollectionStats = computeCollectionStats;
+window.getLocalLeaderboard    = getLocalLeaderboard;
+window.openLeaderboard        = openLeaderboard;
+window.closeLeaderboard       = closeLeaderboard;
