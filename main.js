@@ -85,10 +85,7 @@ const progress = {
     _state: {
         badges: [],          // 漁港章
         fish: [],            // 魚紋章
-        behaviorBadges: [],  // 行為勳章
-        difficulty: [],      // 難度章（本次連線內）
-        companions: [],      // 同伴章（本次連線內）
-        winCounts: {}        // 勝場數（本次連線內）
+        behaviorBadges: []   // 行為勳章
     },
 
     // 本次連線內「新解鎖」的平台徽章類項目，結算時讀取後會被清空（見 win-screen.js）
@@ -121,19 +118,6 @@ const progress = {
             this._state.fish.push(fishName);
             this._newlyUnlocked.fish.push(fishName);
         }
-    },
-
-    unlockDifficulty(name, label) {
-        if (!this._state.difficulty.includes(label)) this._state.difficulty.push(label);
-    },
-
-    unlockCompanion(name, companionName) {
-        if (!this._state.companions.includes(companionName)) this._state.companions.push(companionName);
-    },
-
-    // 獲勝次數累積（依難度分開計數，每次獲勝都會真的加 1，不是只記一次；本次連線內）
-    recordWin(name, difficultyLabel) {
-        this._state.winCounts[difficultyLabel] = (this._state.winCounts[difficultyLabel] || 0) + 1;
     },
 
     // 行為型勳章
@@ -379,25 +363,19 @@ function closeLog() {
  */
 function openCollection() {
     const name = window.playerName && window.playerName !== '守護員' ? window.playerName : null;
-    const data = name ? (progress.load(name) || { badges: [], fish: [], difficulty: [], companions: [] }) : { badges: [], fish: [], difficulty: [], companions: [] };
+    const data = name ? (progress.load(name) || { badges: [], fish: [] }) : { badges: [], fish: [] };
 
     const locationBadges = typeof locationDB !== 'undefined'
         ? locationDB.map(l => l.badge)
         : [];
-    const difficultyBadges = difficultyDB.map(d => d.label);
     const fishList = typeof fishDB !== 'undefined' ? fishDB.map(f => f.n) : [];
-    const companionList = typeof characterDB !== 'undefined'
-        ? characterDB.map(c => ({ n: c.n, img: c.img }))
-        : [];
 
     const unlockedB = data.badges || [];
-    const unlockedD = data.difficulty || [];
     const unlockedF = data.fish || [];
-    const unlockedC = data.companions || [];
     const unlockedBehav = data.behaviorBadges || [];
 
-    const totalAll = locationBadges.length + difficultyBadges.length + fishList.length + companionList.length + BEHAVIOR_BADGE_DB.length;
-    const totalUnlocked = unlockedB.length + unlockedD.length + unlockedF.length + unlockedC.length + unlockedBehav.length;
+    const totalAll = locationBadges.length + fishList.length + BEHAVIOR_BADGE_DB.length;
+    const totalUnlocked = unlockedB.length + unlockedF.length + unlockedBehav.length;
 
     function pct(got, total) { return total ? Math.round(got / total * 100) : 0; }
 
@@ -409,34 +387,6 @@ function openCollection() {
         <div style="margin-bottom:1.4rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <span style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.6);letter-spacing:0.04em;">漁港章</span>
-            <span style="font-size:12px;color:rgba(255,255,255,0.45);">${got} / ${list.length}</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:3px;margin-bottom:10px;overflow:hidden;">
-            <div style="height:100%;border-radius:99px;background:#1D9E75;width:${pct(got,list.length)}%;transition:width 0.6s ease;"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px;">
-            ${list.map(n => {
-                const isUnlocked = unlocked.includes(n);
-                const clickable = isUnlocked ? `onclick="showCollectionZoom('image/${n}.jpg','${n}')" style="cursor:pointer;"` : '';
-                return `
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;" ${clickable}>
-                  <div style="width:100%;aspect-ratio:3/2;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,${isUnlocked?'0.22':'0.06'});background:rgba(255,255,255,0.05);${isUnlocked?'':'filter:grayscale(1) brightness(0.3)'};${isUnlocked?'box-shadow:0 2px 8px rgba(29,158,117,0.35);':''}">
-                    <img src="image/${n}.jpg" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
-                  </div>
-                </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-    }
-
-    // 難度章：可點選已收集項目 → 放大顯示圖片（不顯示文字標籤）
-    function difficultyBadgeBlock(list, unlocked) {
-        const got = list.filter(n => unlocked.includes(n)).length;
-        const cols = 3;
-        return `
-        <div style="margin-bottom:1.4rem;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.6);letter-spacing:0.04em;">難度章</span>
             <span style="font-size:12px;color:rgba(255,255,255,0.45);">${got} / ${list.length}</span>
           </div>
           <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:3px;margin-bottom:10px;overflow:hidden;">
@@ -484,35 +434,6 @@ function openCollection() {
                     <img src="fishdb/${n}.png" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
                   </div>
                   <div style="font-size:9px;text-align:center;color:rgba(255,255,255,${isUnlocked?'0.75':'0.25'});line-height:1.2;">${n}</div>
-                </div>`;
-            }).join('')}
-          </div>
-        </div>`;
-    }
-
-    // 同伴章：已出現的 AI 角色
-    function companionBadgeBlock(list, unlocked) {
-        const got = list.filter(c => unlocked.includes(c.n)).length;
-        const cols = 3;
-        return `
-        <div style="margin-bottom:1.4rem;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.6);letter-spacing:0.04em;">同伴章</span>
-            <span style="font-size:12px;color:rgba(255,255,255,0.45);">${got} / ${list.length}</span>
-          </div>
-          <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:3px;margin-bottom:10px;overflow:hidden;">
-            <div style="height:100%;border-radius:99px;background:#1D9E75;width:${pct(got,list.length)}%;transition:width 0.6s ease;"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px;">
-            ${list.map(c => {
-                const isUnlocked = unlocked.includes(c.n);
-                const clickable = isUnlocked ? `onclick="showCompanionZoom('${c.img}','${c.n}')" style="cursor:pointer;"` : '';
-                return `
-                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;" ${clickable}>
-                  <div style="width:100%;aspect-ratio:1/1;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,${isUnlocked?'0.25':'0.06'});background:rgba(255,255,255,0.05);${isUnlocked?'':'filter:grayscale(1) brightness(0.3)'};${isUnlocked?'box-shadow:0 2px 8px rgba(100,180,255,0.35);':''}">
-                    <img src="${c.img}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">
-                  </div>
-                  <div style="font-size:10px;text-align:center;color:rgba(255,255,255,${isUnlocked?'0.75':'0.25'});line-height:1.2;">${c.n}</div>
                 </div>`;
             }).join('')}
           </div>
@@ -594,8 +515,6 @@ function openCollection() {
           <div style="padding:10px 16px;font-size:13px;color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;">未輸入暱稱，不記錄收集進度</div>`}
           <div style="overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch;">
             ${locationBadgeBlock(locationBadges, unlockedB)}
-            ${difficultyBadgeBlock(difficultyBadges, unlockedD)}
-            ${companionBadgeBlock(companionList, unlockedC)}
             ${fishBadgeBlock(fishList, unlockedF)}
             ${behaviorBadgeBlock(BEHAVIOR_BADGE_DB, unlockedBehav)}
           </div>
@@ -1317,8 +1236,6 @@ function startGame() {
             avatarJpg: `<img src="${jpgSrc}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`,
             avatarWebp: `<img src="${char.img}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`
         });
-        // 解鎖同伴章
-        progress.unlockCompanion(window.playerName, char.n);
     });	
 	
     const selectedLocationId = lockedGameLocationId || window.selectedLocationId || sessionStorage.getItem("selectedLocationId") || "longfeng";

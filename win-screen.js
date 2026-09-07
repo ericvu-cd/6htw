@@ -5,13 +5,14 @@
 function showWinScreen(winner) {
     const isPlayer = !winner.isAI;
 
-    // ── 勝利時解鎖難度章 + 累積獲勝次數 ──
-    // 難度標籤改查 db.js 的 difficultyDB（getDifficultyInfo()），
-    // 不再用 gameDifficulty <= 0.4 這種門檻硬判斷。
-    if (isPlayer) {
-        const diffLabelShort = getDifficultyInfo(gameDifficulty).label;
-        progress.unlockDifficulty(window.playerName, diffLabelShort);
-        progress.recordWin(window.playerName, diffLabelShort);
+    // ── 勝利獎勵：直接發金幣（不再用「難度章/勝場數」這種需要另外找地方持久保存的
+    // 收集項目——金幣本來就是平台 Firestore 錢包裡的東西，天生就是永久累加、不會
+    // 因為關掉分頁或平台沒有對應欄位而消失，勝場數要「找地方放」最自然的位置就是這裡）。
+    // 金額沿用原本 db.js difficultyDB 的 winBonus（新手+1／標準+2／專業+3），
+    // 每贏一局都會真的送一次，不限次數。
+    if (isPlayer && typeof reportComplete === "function") {
+        const winBonus = getDifficultyInfo(gameDifficulty).winBonus || 0;
+        if (winBonus > 0) reportComplete(winBonus);
     }
 
     // ── 行為型勳章判斷，追蹤本局新解鎖 ──
@@ -23,7 +24,6 @@ function showWinScreen(winner) {
         const playerName = window.playerName;
 
         const checkAndUnlock = (key) => {
-            if (!playerName || !playerName.trim() || playerName.trim() === '守護員') return;
             const data = progress.load(playerName);
             const already = data && data.behaviorBadges && data.behaviorBadges.includes(key);
             progress.unlockBehaviorBadge(playerName, key);
@@ -790,55 +790,31 @@ function _harborScore(badgeName) {
     return (loc && loc.badgeScore != null) ? loc.badgeScore : 0;
 }
 
-// 依同伴角色名稱查 db.js characterDB 裡寫死的 score 欄位
-function _companionScore(companionName) {
-    if (typeof characterDB === "undefined") return 0;
-    const char = characterDB.find(function (c) { return c.n === companionName; });
-    return (char && char.score != null) ? char.score : 0;
-}
-
-// 依難度標籤查 db.js DIFFICULTY_SCORES
-function _difficultyScore(label) {
-    if (typeof DIFFICULTY_SCORES === "undefined") return 0;
-    return DIFFICULTY_SCORES[label] || 0;
-}
-
 /* ── 計算某玩家目前的收集分數與完整度 ── */
 function computeCollectionStats(name) {
     const data = (typeof progress !== "undefined") ? progress.load(name) : null;
 
     const behaviorScores = (typeof BEHAVIOR_BADGE_SCORES !== "undefined") ? BEHAVIOR_BADGE_SCORES : {};
-    const winBonus        = (typeof WIN_BONUS_SCORE !== "undefined") ? WIN_BONUS_SCORE : {};
 
     const fishList       = (data && data.fish) ? data.fish : [];
     const behaviorList    = (data && data.behaviorBadges) ? data.behaviorBadges : [];
     const harborList      = (data && data.badges) ? data.badges : [];
-    const companionList   = (data && data.companions) ? data.companions : [];
-    const difficultyList  = (data && data.difficulty) ? data.difficulty : [];
-    const winCounts        = (data && data.winCounts) ? data.winCounts : {};
 
     const fishScore       = fishList.reduce(function (s, n) { return s + _fishScore(n); }, 0);
     const behaviorScore   = behaviorList.reduce(function (s, n) { return s + (behaviorScores[n] || 0); }, 0);
     const harborScore     = harborList.reduce(function (s, n) { return s + _harborScore(n); }, 0);
-    const companionScore  = companionList.reduce(function (s, n) { return s + _companionScore(n); }, 0);
-    const difficultyScore = difficultyList.reduce(function (s, n) { return s + _difficultyScore(n); }, 0);
-    const winScore        = Object.keys(winCounts).reduce(function (s, label) {
-        return s + winCounts[label] * (winBonus[label] || 0);
-    }, 0);
 
-    const totalScore = fishScore + behaviorScore + harborScore + companionScore + difficultyScore + winScore;
+    const totalScore = fishScore + behaviorScore + harborScore;
 
     const fishMax     = (typeof fishDB !== "undefined") ? fishDB.length : 48;
     const harborMax    = (typeof locationDB !== "undefined") ? locationDB.length : 6;
-    const companionMax = (typeof characterDB !== "undefined") ? characterDB.length : 6;
     const behaviorMax  = (typeof BEHAVIOR_BADGE_DB !== "undefined") ? BEHAVIOR_BADGE_DB.length : Object.keys(behaviorScores).length;
-    const difficultyMax = (typeof difficultyDB !== "undefined") ? difficultyDB.length : 3;
 
-    const totalCount    = fishList.length + behaviorList.length + harborList.length + companionList.length + difficultyList.length;
-    const totalCountMax = fishMax + behaviorMax + harborMax + companionMax + difficultyMax;
+    const totalCount    = fishList.length + behaviorList.length + harborList.length;
+    const totalCountMax = fishMax + behaviorMax + harborMax;
 
     return {
-        fishScore, behaviorScore, harborScore, companionScore, difficultyScore, winScore, totalScore,
+        fishScore, behaviorScore, harborScore, totalScore,
         totalCount, totalCountMax
     };
 }
@@ -873,8 +849,7 @@ function openLeaderboard() {
     const s = computeCollectionStats(window.playerName);
     const rowsHtml = [
         ["🐟 魚類圖鑑", s.fishScore], ["✨ 行為勳章", s.behaviorScore],
-        ["⚓ 漁港章", s.harborScore], ["👥 同伴章", s.companionScore],
-        ["🎚 難度章", s.difficultyScore], ["🏅 勝場加成", s.winScore]
+        ["⚓ 漁港章", s.harborScore]
     ].map(function (row) {
         return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08);">' +
                '<span>' + row[0] + '</span><span>' + row[1] + ' 分</span></div>';

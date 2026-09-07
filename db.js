@@ -639,9 +639,9 @@ const characterDB = [
 //  若要改成 4 級以上，getDifficultyInfo() 也要跟著改寫判斷方式。
 // ══════════════════════════════════════════════════════════════
 const difficultyDB = [
-    { value: 0.4, label: "新手", scoreBadge: 12, winBonus: 1 },
-    { value: 0.7, label: "標準", scoreBadge: 16, winBonus: 2 },
-    { value: 0.9, label: "專業", scoreBadge: 18, winBonus: 3 }
+    { value: 0.4, label: "新手", scoreBadge: 12, winBonus: 0 },
+    { value: 0.7, label: "標準", scoreBadge: 16, winBonus: 1 },
+    { value: 0.9, label: "專業", scoreBadge: 18, winBonus: 2 }
 ];
 
 // 依目前 gameDifficulty 數值，找出對應的難度設定物件（見上方註解的假設）
