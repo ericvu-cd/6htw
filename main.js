@@ -3,7 +3,7 @@
    《友魚守護團：台灣海線任務》卡牌遊戲主程式
 
    本檔案負責的功能（依出現順序）：
-     1. 對話佇列 / 玩家收集進度（localStorage）與成就勳章系統
+     1. 對話佇列 / 玩家收集進度（改接平台 player_info／complete，不用 localStorage）與成就勳章系統
      2. 開場故事、圖鑑說明、收集圖鑑等彈窗 UI
      3. 卡牌預覽、手牌與桌面渲染（renderUI / renderTable）
      4. 海洋背景特效（魚群、氣泡、海底光束動畫）
@@ -73,23 +73,20 @@ const chatQueue = {
 };
 
 // ── 玩家收集進度系統（改接平台，不再用 localStorage） ──────────────────────────
-// 漁港章／行為勳章／魚紋章：「已擁有」狀態一律以平台 player_info.badges 回填
-// （見 platform.js 的 syncBadgesFromPlatform()），本次連線內新解鎖的也會記在這裡，
-// 供 win-screen.js 结算時整批轉成平台徽章 ID 回報。
-// 同伴章／難度章／勝場數：平台沒有對應的資料欄位可存，只在本次連線（同一個分頁，
-// 就算按「再玩一次」重開新的一局也算同一次連線）期間累計，重新整理或關閉分頁再
-// 重開才會歸零——這不影響漁港章／行為勳章／魚紋章，那三類永遠讀得到之前已解鎖的。
-// 對外的函式介面（load/save/unlockXXX）保留跟舊版一致，name 參數保留相容但不再使用，
-// 這樣 win-screen.js／main.js 其他呼叫這些函式的地方完全不用跟著改。
+// 關鍵原則：畫面上看到的「已收集」，一定要是「後台已經確定收到」的，不能是「本地剛
+// 解鎖、還沒送出去」的——不然中途離開（例如按「返回」直接關閉分頁）會出現「畫面顯示
+// 已收集，但後台其實沒存到」的落差。所以這裡分成兩份：
+//   _confirmed → 已經送給平台、確定存到的部分（開局時用 player_info.badges 回填；
+//                之後每次「這局結算」送出成功後，才會把 _pending 併進來）。
+//                所有畫面顯示（我的海紋收集、我的收藏進度）都只讀這一份。
+//   _pending  → 本局遊戲中新解鎖、但「還沒送出/還沒結算」的暫存區，只用來給遊戲內部
+//                邏輯判斷「這張是不是已經解鎖過」，不會被拿去顯示。
+// 漁港章／魚紋章雖然一進港/發牌當下就會判定解鎖，但都只先進 _pending；要等這一局
+// 結算（win-screen.js 的 showWinScreen）送給平台之後，才會搬進 _confirmed、畫面才會
+// 顯示出來。同伴章／難度章／勝場數已經整個拿掉，不在這份資料裡。
 const progress = {
-    _state: {
-        badges: [],          // 漁港章
-        fish: [],            // 魚紋章
-        behaviorBadges: []   // 行為勳章
-    },
-
-    // 本次連線內「新解鎖」的平台徽章類項目，結算時讀取後會被清空（見 win-screen.js）
-    _newlyUnlocked: { badges: [], fish: [], behaviorBadges: [] },
+    _confirmed: { badges: [], fish: [], behaviorBadges: [] },
+    _pending: { badges: [], fish: [], behaviorBadges: [] },
 
     // 收到平台 player_info 後呼叫：把已擁有的漁港章／行為勳章／魚紋章整批覆寫回填
     // （依規格建議整批覆寫，不要合併疊加，避免跨帳號污染）。
@@ -98,34 +95,43 @@ const progress = {
         function stripPrefix(prefix) {
             return ids.filter(id => id.indexOf(prefix) === 0).map(id => id.slice(prefix.length));
         }
-        this._state.badges = stripPrefix(BADGE_PREFIX.harbor);
-        this._state.behaviorBadges = stripPrefix(BADGE_PREFIX.behavior);
-        this._state.fish = stripPrefix(BADGE_PREFIX.fish);
+        this._confirmed.badges = stripPrefix(BADGE_PREFIX.harbor);
+        this._confirmed.behaviorBadges = stripPrefix(BADGE_PREFIX.behavior);
+        this._confirmed.fish = stripPrefix(BADGE_PREFIX.fish);
     },
 
-    load(name) { return this._state; },
-    save(name, data) { /* no-op：狀態直接改 _state，platform.js 負責跟平台同步 */ },
+    // 畫面顯示一律讀「已確認」的部分
+    load(name) { return this._confirmed; },
+    save(name, data) { /* no-op：狀態直接改 _confirmed/_pending，platform.js 負責跟平台同步 */ },
+
+    // 判斷「這張是不是已經解鎖過」時，已確認＋暫存都要算，避免同一局內重複觸發
+    _owns(category, name) {
+        return this._confirmed[category].includes(name) || this._pending[category].includes(name);
+    },
 
     unlockBadge(name, badgeName) {
-        if (!this._state.badges.includes(badgeName)) {
-            this._state.badges.push(badgeName);
-            this._newlyUnlocked.badges.push(badgeName);
-        }
+        if (!this._owns('badges', badgeName)) this._pending.badges.push(badgeName);
     },
 
     unlockFish(name, fishName) {
-        if (!this._state.fish.includes(fishName)) {
-            this._state.fish.push(fishName);
-            this._newlyUnlocked.fish.push(fishName);
-        }
+        if (!this._owns('fish', fishName)) this._pending.fish.push(fishName);
     },
 
-    // 行為型勳章
+    // 行為型勳章：條件要整局打完才能判斷（見 win-screen.js checkAndUnlock），
+    // 一樣先進 _pending，局末結算時再一起送出、一起搬進 _confirmed。
     unlockBehaviorBadge(name, badgeName) {
-        if (!this._state.behaviorBadges.includes(badgeName)) {
-            this._state.behaviorBadges.push(badgeName);
-            this._newlyUnlocked.behaviorBadges.push(badgeName);
-        }
+        if (!this._owns('behaviorBadges', badgeName)) this._pending.behaviorBadges.push(badgeName);
+    },
+
+    // 這一局結算成功、把 _pending 送出去之後呼叫：把暫存的合併進「已確認」，
+    // 從這一刻起，畫面上（我的海紋收集／我的收藏進度）才會顯示出這些新項目。
+    commitPending() {
+        ['badges', 'fish', 'behaviorBadges'].forEach(cat => {
+            this._pending[cat].forEach(n => {
+                if (!this._confirmed[cat].includes(n)) this._confirmed[cat].push(n);
+            });
+        });
+        this._pending = { badges: [], fish: [], behaviorBadges: [] };
     }
 };
 

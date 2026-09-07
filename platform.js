@@ -96,7 +96,8 @@ function reportComplete(coins, badgeId) {
     sendToPlatform('complete', payload);
 }
 
-// 把「本次連線新解鎖」的漁港章／行為勳章／魚紋章，逐一轉成平台徽章 ID 並各自回報（各 +10 金幣）。
+// 把「本局新解鎖」的漁港章／行為勳章／魚紋章，逐一轉成平台徽章 ID 並各自回報（各 +10 金幣）。
+// 規格明確允許「每次獲得一個都可以各自送一次 complete」，已擁有的平台會自動跳過不重複發放。
 function reportNewBadges(newlyUnlocked) {
     const ids = []
         .concat((newlyUnlocked.badges || []).map(function (n) { return platformBadgeId('harbor', n); }))

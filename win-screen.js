@@ -52,11 +52,15 @@ function showWinScreen(winner) {
         }
     }
 
-    // ── 回報平台：本局新解鎖的漁港章／行為勳章／魚紋章，以及是否打破個人最佳分數 ──
-    // （同伴章／難度章／勝場數不算平台徽章，只影響下面 totalScore 裡的分數，不會單獨回報）
-    if (isPlayer && typeof reportNewBadges === "function") {
-        reportNewBadges(progress._newlyUnlocked);
-        progress._newlyUnlocked = { badges: [], fish: [], behaviorBadges: [] }; // 回報完清空，避免下一局重複回報
+    // ── 這局結算：把本局新解鎖的漁港章／魚紋章／行為勳章一次送給平台，
+    // 送出去之後才把 progress._pending 併進 progress._confirmed——從這一刻起，
+    // 「我的海紋收集」「我的收藏進度」畫面才會顯示這些新項目，之前都只是暫存、不顯示。
+    // 這裡不看 isPlayer（不限定玩家要贏）：漁港章／魚紋章只要玩過這局就會有，
+    // 輸贏都該正常送出、正常顯示；行為勳章本來就只有玩家獲勝時才會進到 _pending
+    // （見上方 checkAndUnlock 只在 isPlayer 時執行），輸的話這裡自然是空陣列。
+    if (typeof reportNewBadges === "function") {
+        reportNewBadges(progress._pending);
+        progress.commitPending();
         if (typeof computeCollectionStats === "function" && typeof reportScoreIfHigher === "function") {
             const _stats = computeCollectionStats(window.playerName);
             reportScoreIfHigher(_stats.totalScore);
