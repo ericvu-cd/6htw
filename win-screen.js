@@ -52,6 +52,17 @@ function showWinScreen(winner) {
         }
     }
 
+    // ── 回報平台：本局新解鎖的漁港章／行為勳章／魚紋章，以及是否打破個人最佳分數 ──
+    // （同伴章／難度章／勝場數不算平台徽章，只影響下面 totalScore 裡的分數，不會單獨回報）
+    if (isPlayer && typeof reportNewBadges === "function") {
+        reportNewBadges(progress._newlyUnlocked);
+        progress._newlyUnlocked = { badges: [], fish: [], behaviorBadges: [] }; // 回報完清空，避免下一局重複回報
+        if (typeof computeCollectionStats === "function" && typeof reportScoreIfHigher === "function") {
+            const _stats = computeCollectionStats(window.playerName);
+            reportScoreIfHigher(_stats.totalScore);
+        }
+    }
+
     // 解除 ui-lock
     const uiLock = document.getElementById("ui-lock");
     if (uiLock) uiLock.style.display = "none";
@@ -414,6 +425,7 @@ function showWinScreen(winner) {
         btnRestart.textContent = "↺ 重新啟航冒險";
         btnRestart.onclick = () => _restartGame(winBgm, gameBgm, particleTimer);
         btnZone.appendChild(btnRestart);
+        btnZone.appendChild(_makeCloseButton(isPlayer));
 
     } else {
         // 無新勳章：分享是主角
@@ -443,6 +455,7 @@ function showWinScreen(winner) {
         btnRestart.textContent = "↺ 重新啟航冒險";
         btnRestart.onclick = () => _restartGame(winBgm, gameBgm, particleTimer);
         btnZone.appendChild(btnRestart);
+        btnZone.appendChild(_makeCloseButton(isPlayer));
     }
 
     // 底部文字連結列
@@ -476,7 +489,28 @@ function showWinScreen(winner) {
     requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = "1"; }));
 }
 
+// ── 結算畫面「關閉」按鈕：送 exit 訊息 + window.close()，回到平台 ──
+function _makeCloseButton(isPlayer) {
+    const btnClose = document.createElement("button");
+    btnClose.style.cssText = `
+        width:100%;padding:13px;border-radius:50px;cursor:pointer;
+        font-size:.95rem;font-weight:700;letter-spacing:.3px;
+        font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
+        border:1.5px solid rgba(255,255,255,.18);
+        background:rgba(255,255,255,.06);
+        color:rgba(255,255,255,.65);
+    `;
+    btnClose.textContent = "✕ 關閉，返回平台";
+    btnClose.onclick = () => { if (typeof closeTaskToPlatform === "function") closeTaskToPlatform(); };
+    return btnClose;
+}
+
 // ── 重新啟動遊戲 ──
+// 用 location.reload() 而非手動重設一堆全域狀態：同一個分頁重新整理不會失去
+// window.opener（跟平台的 postMessage 連結還在），且 index.html 開頭已經有
+// sessionStorage.skipIntro 的判斷會跳過開場動畫直接進歡迎頁，重整後 platform.js
+// 會重新送一次 ready、拿到平台最新的 player_info（含剛剛這局才拿到的徽章/分數），
+// 資料反而更準，不用自己在 JS 裡維護一份「重開後要保留什麼」的清單。
 function _restartGame(winBgm, gameBgm, particleTimer) {
     winBgm.pause();
     if (gameBgm) gameBgm.play().catch(() => {});
@@ -560,7 +594,7 @@ async function shareAchievementCard(isPlayer, winner, badgeKey) {
     ctx.font = "600 15px 'PingFang TC','Microsoft JhengHei',sans-serif";
     ctx.fillStyle = "rgba(155,240,185,.6)";
     ctx.letterSpacing = "4px";
-    ctx.fillText("海紋守護團", cx, cy - 128);
+    ctx.fillText("友魚守護團", cx, cy - 128);
     ctx.letterSpacing = "0px";
 
     // 「成就解鎖」
@@ -592,18 +626,18 @@ async function shareAchievementCard(isPlayer, winner, badgeKey) {
     ctx.letterSpacing = "1px";
     ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(200,230,255,.5)";
-    ctx.fillText("© 2026 海紋守護團", cx, H - 28);
+    ctx.fillText("© 2026 友魚守護團", cx, H - 28);
     ctx.letterSpacing = "0px";
 
     canvas.toBlob(async (blob) => {
         if (!blob) { alert("卡片產生失敗"); return; }
-        const file = new File([blob], `海紋守護團_${badgeKey}.png`, { type:"image/png" });
-        const text = `我在《海紋守護團》解鎖了「${badgeKey}」成就！${icon} 你也來挑戰看看 🌊`;
+        const file = new File([blob], `友魚守護團_${badgeKey}.png`, { type:"image/png" });
+        const text = `我在《友魚守護團》解鎖了「${badgeKey}」成就！${icon} 你也來挑戰看看 🌊`;
         if (navigator.canShare && navigator.canShare({ files:[file] })) {
             try { await navigator.share({ files:[file], text }); }
-            catch(e) { if (e.name !== "AbortError") fallbackDownload(canvas, `海紋守護團_${badgeKey}`); }
+            catch(e) { if (e.name !== "AbortError") fallbackDownload(canvas, `友魚守護團_${badgeKey}`); }
         } else {
-            fallbackDownload(canvas, `海紋守護團_${badgeKey}`);
+            fallbackDownload(canvas, `友魚守護團_${badgeKey}`);
         }
     }, "image/png");
 }
@@ -650,7 +684,7 @@ async function shareGameCard(isPlayer, winner) {
     ctx.shadowColor = isPlayer?"rgba(100,255,160,.5)":"rgba(50,130,255,.45)";
     ctx.shadowBlur = 26;
     ctx.fillStyle = isPlayer?"#fff":"rgba(215,235,255,.96)";
-    ctx.fillText("海紋守護團", CX, Y); Y += 38;
+    ctx.fillText("友魚守護團", CX, Y); Y += 38;
     ctx.shadowBlur = 0;
     ctx.font = "500 15px 'PingFang TC','Microsoft JhengHei',sans-serif";
     ctx.letterSpacing = "3px";
@@ -682,19 +716,19 @@ async function shareGameCard(isPlayer, winner) {
     ctx.letterSpacing = "1px";
     ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(200,230,255,.5)";
-    ctx.fillText("© 2026 海紋守護團", CX, H - 28);
+    ctx.fillText("© 2026 友魚守護團", CX, H - 28);
     ctx.letterSpacing = "0px";
 
     canvas.toBlob(async (blob) => {
         if (!blob) { alert("卡片產生失敗"); return; }
-        const file = new File([blob], "image/海紋守護團.png", {type:"image/png"});
+        const file = new File([blob], "image/友魚守護團.png", {type:"image/png"});
         const text = isPlayer
-            ? `${winner.n} 在《海紋守護團》守護了海洋！難度【${diffLabel}】，共 ${rounds} 回合 🎉🌊`
-            : `${winner.n} 在《海紋守護團》這次沒守住…下次再來 🌊`;
+            ? `${winner.n} 在《友魚守護團》守護了海洋！難度【${diffLabel}】，共 ${rounds} 回合 🎉🌊`
+            : `${winner.n} 在《友魚守護團》這次沒守住…下次再來 🌊`;
         if (navigator.canShare && navigator.canShare({ files:[file] })) {
             try { await navigator.share({ files:[file], text }); }
-            catch(e) { if (e.name !== "AbortError") fallbackDownload(canvas, "海紋守護團"); }
-        } else { fallbackDownload(canvas, "海紋守護團"); }
+            catch(e) { if (e.name !== "AbortError") fallbackDownload(canvas, "友魚守護團"); }
+        } else { fallbackDownload(canvas, "友魚守護團"); }
     }, "image/png");
 }
 
@@ -708,7 +742,7 @@ function loadImageAsBlob(src) {
     });
 }
 
-function fallbackDownload(canvas, name = "海紋守護團") {
+function fallbackDownload(canvas, name = "友魚守護團") {
     const a = document.createElement("a");
     a.href = canvas.toDataURL("image/png");
     a.download = name + ".png";
@@ -809,23 +843,6 @@ function computeCollectionStats(name) {
     };
 }
 
-/* ── 掃描本機所有玩過的暱稱，算分排序 ──
-   localStorage 裡每個 progress_XXX 的 key，XXX 就是暱稱。 */
-function getLocalLeaderboard() {
-    const rows = [];
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key || key.indexOf("progress_") !== 0) continue;
-        const nickname = key.slice("progress_".length);
-        if (!nickname || nickname === "守護員") continue;
-        const stats = computeCollectionStats(nickname);
-        if (stats.totalCount <= 0) continue;
-        rows.push(Object.assign({ nickname: nickname }, stats));
-    }
-    rows.sort(function (a, b) { return b.totalScore - a.totalScore; });
-    return rows;
-}
-
 function _escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -833,6 +850,8 @@ function _escapeHtml(s) {
 }
 
 /* ── 排行榜彈窗 ── */
+// 改接平台後，「跨裝置比較」交給平台首頁自己的排行榜（各任務前10名），
+// 這裡只顯示「我的收藏進度」——本裝置本人這個任務目前的收集分數與各類別明細。
 function openLeaderboard() {
     let overlay = document.getElementById("leaderboard-overlay");
     if (!overlay) {
@@ -842,8 +861,8 @@ function openLeaderboard() {
         overlay.innerHTML =
             '<div style="width:88%;max-width:380px;max-height:78vh;overflow-y:auto;background:rgba(8,20,14,.96);border:1px solid rgba(100,200,150,.28);border-radius:20px;padding:26px 22px 22px;position:relative;">' +
                 '<button onclick="closeLeaderboard()" style="position:absolute;top:14px;right:16px;background:none;border:none;cursor:pointer;font-size:20px;color:rgba(200,240,220,.55);">✕</button>' +
-                '<div style="font-size:1.1rem;font-weight:900;color:rgba(200,245,220,.9);letter-spacing:1px;margin-bottom:2px;">🏆 守護排行榜</div>' +
-                '<div style="font-size:11px;color:rgba(160,210,180,.55);margin-bottom:16px;">本機紀錄（同裝置玩過的暱稱），依收集分數排序</div>' +
+                '<div style="font-size:1.1rem;font-weight:900;color:rgba(200,245,220,.9);letter-spacing:1px;margin-bottom:2px;">🏆 我的收藏進度</div>' +
+                '<div style="font-size:11px;color:rgba(160,210,180,.55);margin-bottom:16px;">完整跨玩家排行榜請到平台首頁的排行榜查看</div>' +
                 '<div id="leaderboard-list" style="font-size:14px;color:rgba(220,245,230,.9);">載入中…</div>' +
             "</div>";
         document.body.appendChild(overlay);
@@ -851,25 +870,21 @@ function openLeaderboard() {
     overlay.style.display = "flex";
 
     const list = document.getElementById("leaderboard-list");
-    const rows = getLocalLeaderboard();
-    if (!rows.length) {
-        list.textContent = "目前還沒有紀錄，快去解鎖第一個成就！";
-        return;
-    }
-    const myName = (window.playerName || "").trim();
-    list.innerHTML = rows.map(function (r, i) {
-        const mine = r.nickname === myName;
-        return '<div style="padding:8px 0; border-bottom:1px solid rgba(255,255,255,.08);' +
-               (mine ? ' color:#ffd54a; font-weight:700;' : '') + '">' +
-                    '<div style="display:flex; justify-content:space-between;">' +
-                        '<span>' + (i + 1) + '. ' + _escapeHtml(r.nickname) + (mine ? '（你）' : '') + '</span>' +
-                        '<span>' + r.totalScore + ' 分</span>' +
-                    '</div>' +
-                    '<div style="font-size:11px; color:rgba(200,230,215,.55); margin-top:2px;">' +
-                        '收集 ' + r.totalCount + '/' + r.totalCountMax +
-                    '</div>' +
-               '</div>';
+    const s = computeCollectionStats(window.playerName);
+    const rowsHtml = [
+        ["🐟 魚類圖鑑", s.fishScore], ["✨ 行為勳章", s.behaviorScore],
+        ["⚓ 漁港章", s.harborScore], ["👥 同伴章", s.companionScore],
+        ["🎚 難度章", s.difficultyScore], ["🏅 勝場加成", s.winScore]
+    ].map(function (row) {
+        return '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08);">' +
+               '<span>' + row[0] + '</span><span>' + row[1] + ' 分</span></div>';
     }).join("");
+    list.innerHTML =
+        '<div style="text-align:center;margin-bottom:14px;">' +
+            '<div style="font-size:12px;color:rgba(200,230,215,.6);">' + _escapeHtml(window.playerName || "") + ' 目前總分</div>' +
+            '<div style="font-size:2rem;font-weight:900;color:#ffd54a;">' + s.totalScore + '</div>' +
+            '<div style="font-size:11px;color:rgba(200,230,215,.55);">收集 ' + s.totalCount + ' / ' + s.totalCountMax + '</div>' +
+        '</div>' + rowsHtml;
 }
 
 function closeLeaderboard() {
@@ -878,6 +893,5 @@ function closeLeaderboard() {
 }
 
 window.computeCollectionStats = computeCollectionStats;
-window.getLocalLeaderboard    = getLocalLeaderboard;
 window.openLeaderboard        = openLeaderboard;
 window.closeLeaderboard       = closeLeaderboard;

@@ -796,8 +796,8 @@
 				<span>守護員暱稱</span>
 				<span id="ws-collection-badge" class="ws-badge-empty" onclick="wsOpenCollection()" title="我的海紋收集">🏅</span>
 			</div>
-			<input id="ws-name-input" type="text"
-				placeholder="輸入你的暱稱…" maxlength="12">
+			<input id="ws-name-input" type="text" readonly
+				placeholder="連接平台中…" maxlength="12">
 		</div>
 
 		<!-- ── 天氣海象卡片（只顯示當天天氣，點擊顯示說明） ── -->
@@ -814,7 +814,7 @@
 
 		<!-- ── 版權列（永遠在最底，不被遮蓋） ── -->
 		<div id="ws-copyright">
-			<span>© 2026 海紋守護團 ·
+			<span>© 2026 友魚守護團 ·
 				<a onclick="openContact()">聯絡作者</a>
 			</span>
 		</div>
@@ -1042,11 +1042,8 @@
 		badge.classList.toggle('ws-badge-empty', !hasName);
 	}
 
-	/* ── 點擊徽章：開啟「我的海紋收集」（依目前輸入框暱稱） ── */
+	/* ── 點擊徽章：開啟「我的海紋收集」（暱稱一律來自平台） ── */
 	window.wsOpenCollection = function(){
-		var nameEl = document.getElementById('ws-name-input');
-		var typed  = nameEl && nameEl.value.trim();
-		window.playerName = typed || '守護員';
 		if(typeof openCollection === 'function'){
 			openCollection();
 		} else {
@@ -1059,14 +1056,26 @@
 		wsShowToast('💡 可以點擊漁港出發', 2000);
 	};
 
-	/* ── 自動帶入上次暱稱（頁面載入時即執行，不依賴選港） ── */
+	/* ── 暱稱改由平台提供：收到 player_info 後把 window.playerName／輸入框
+	   都填上平台暱稱（輸入框設 readonly，玩家不能自己改，避免跟平台帳號對不上）。
+	   PLATFORM 定義在 platform.js，若不是平台開啟（沒有 window.opener，直接用瀏覽器
+	   打開測試），PLATFORM.onReady 仍然會在收到 player_info 前一直等，這裡加一個
+	   保險：完全沒有 opener 時直接給預設測試暱稱，不用真的卡住等不到的訊息。 */
 	(function(){
 		var nameEl = document.getElementById('ws-name-input');
-		if(!nameEl) return;
-		var last = localStorage.getItem('lastPlayerName');
-		if(last) nameEl.value = last;
-		wsUpdateCollectionBadge();
-		nameEl.addEventListener('input', wsUpdateCollectionBadge);
+		function applyPlatformName(){
+			window.playerName = (typeof PLATFORM !== 'undefined' && PLATFORM.nickname) ? PLATFORM.nickname : '守護員';
+			if(nameEl) nameEl.value = window.playerName;
+			wsUpdateCollectionBadge();
+		}
+		if(typeof PLATFORM !== 'undefined' && PLATFORM.connected){
+			PLATFORM.onReady(applyPlatformName);
+		} else {
+			// 測試模式（不是平台開啟）：不用等 player_info，直接給預設暱稱方便本機測試
+			window.playerName = '測試玩家';
+			if(nameEl) nameEl.value = window.playerName;
+			wsUpdateCollectionBadge();
+		}
 	})();
 
 	/* ── Toast ── */
@@ -1197,10 +1206,7 @@
 			wsShowToast('⛔ 此港口今日封港，請重新選擇');
 			return;
 		}
-		var nameEl = document.getElementById('ws-name-input');
-		var typedName = nameEl && nameEl.value.trim();
-		if(typedName) localStorage.setItem('lastPlayerName', typedName);
-		window.playerName = typedName || '守護員';
+		// 暱稱固定來自平台（見上方 applyPlatformName），這裡不再讀輸入框、不再存 localStorage
 		sessionStorage.setItem('selectedLocationId', window.selectedLocationId);
 
 		/* 按下按鈕的當下，就把選中的漁港 id 鎖進一個獨立變數，直接往下傳給 initGame()。

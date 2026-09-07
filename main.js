@@ -1,6 +1,6 @@
 ﻿/* ═══════════════════════════════════════════════════════════════════════
    main.js — 遊戲核心邏輯
-   《海紋守護團：台灣海線任務》卡牌遊戲主程式
+   《友魚守護團：台灣海線任務》卡牌遊戲主程式
 
    本檔案負責的功能（依出現順序）：
      1. 對話佇列 / 玩家收集進度（localStorage）與成就勳章系統
@@ -72,84 +72,83 @@ const chatQueue = {
     }
 };
 
-// ── 玩家收集進度系統 ──────────────────────────
-// 以「玩家暱稱」為 key，將收集進度（漁港章／魚紋章／難度章／同伴章／行為勳章）
-// 存進 localStorage，讓玩家下次重新整理或再玩一次時仍保留收集紀錄。
-// 注意：暱稱是「守護員」（預設值／未輸入）時一律不記錄，避免大家共用同一筆資料。
+// ── 玩家收集進度系統（改接平台，不再用 localStorage） ──────────────────────────
+// 漁港章／行為勳章／魚紋章：「已擁有」狀態一律以平台 player_info.badges 回填
+// （見 platform.js 的 syncBadgesFromPlatform()），本次連線內新解鎖的也會記在這裡，
+// 供 win-screen.js 结算時整批轉成平台徽章 ID 回報。
+// 同伴章／難度章／勝場數：平台沒有對應的資料欄位可存，只在本次連線（同一個分頁，
+// 就算按「再玩一次」重開新的一局也算同一次連線）期間累計，重新整理或關閉分頁再
+// 重開才會歸零——這不影響漁港章／行為勳章／魚紋章，那三類永遠讀得到之前已解鎖的。
+// 對外的函式介面（load/save/unlockXXX）保留跟舊版一致，name 參數保留相容但不再使用，
+// 這樣 win-screen.js／main.js 其他呼叫這些函式的地方完全不用跟著改。
 const progress = {
-    _key(name) { return "progress_" + name; },
-
-    load(name) {
-        if (!name || !name.trim()) return null;
-        try {
-            const raw = localStorage.getItem(this._key(name.trim()));
-            return raw ? JSON.parse(raw) : { badges: [], fish: [], difficulty: [] };
-        } catch(e) { return { badges: [], fish: [] }; }
+    _state: {
+        badges: [],          // 漁港章
+        fish: [],            // 魚紋章
+        behaviorBadges: [],  // 行為勳章
+        difficulty: [],      // 難度章（本次連線內）
+        companions: [],      // 同伴章（本次連線內）
+        winCounts: {}        // 勝場數（本次連線內）
     },
 
-    save(name, data) {
-        if (!name || !name.trim()) return;
-        try { localStorage.setItem(this._key(name.trim()), JSON.stringify(data)); } catch(e) {}
+    // 本次連線內「新解鎖」的平台徽章類項目，結算時讀取後會被清空（見 win-screen.js）
+    _newlyUnlocked: { badges: [], fish: [], behaviorBadges: [] },
+
+    // 收到平台 player_info 後呼叫：把已擁有的漁港章／行為勳章／魚紋章整批覆寫回填
+    // （依規格建議整批覆寫，不要合併疊加，避免跨帳號污染）。
+    syncFromPlatform(platformBadgeIds) {
+        const ids = platformBadgeIds || [];
+        function stripPrefix(prefix) {
+            return ids.filter(id => id.indexOf(prefix) === 0).map(id => id.slice(prefix.length));
+        }
+        this._state.badges = stripPrefix(BADGE_PREFIX.harbor);
+        this._state.behaviorBadges = stripPrefix(BADGE_PREFIX.behavior);
+        this._state.fish = stripPrefix(BADGE_PREFIX.fish);
     },
+
+    load(name) { return this._state; },
+    save(name, data) { /* no-op：狀態直接改 _state，platform.js 負責跟平台同步 */ },
 
     unlockBadge(name, badgeName) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.badges.includes(badgeName)) {
-            data.badges.push(badgeName);
-            this.save(name, data);
+        if (!this._state.badges.includes(badgeName)) {
+            this._state.badges.push(badgeName);
+            this._newlyUnlocked.badges.push(badgeName);
         }
     },
 
     unlockFish(name, fishName) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.fish.includes(fishName)) {
-            data.fish.push(fishName);
-            this.save(name, data);
+        if (!this._state.fish.includes(fishName)) {
+            this._state.fish.push(fishName);
+            this._newlyUnlocked.fish.push(fishName);
         }
     },
 
     unlockDifficulty(name, label) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.difficulty) data.difficulty = [];
-        if (!data.difficulty.includes(label)) {
-            data.difficulty.push(label);
-            this.save(name, data);
-        }
+        if (!this._state.difficulty.includes(label)) this._state.difficulty.push(label);
     },
 
     unlockCompanion(name, companionName) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.companions) data.companions = [];
-        if (!data.companions.includes(companionName)) {
-            data.companions.push(companionName);
-            this.save(name, data);
-        }
+        if (!this._state.companions.includes(companionName)) this._state.companions.push(companionName);
     },
 
-    // 獲勝次數累積（依難度分開計數，每次獲勝都會真的加 1，不是只記一次）
+    // 獲勝次數累積（依難度分開計數，每次獲勝都會真的加 1，不是只記一次；本次連線內）
     recordWin(name, difficultyLabel) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.winCounts) data.winCounts = {};
-        data.winCounts[difficultyLabel] = (data.winCounts[difficultyLabel] || 0) + 1;
-        this.save(name, data);
+        this._state.winCounts[difficultyLabel] = (this._state.winCounts[difficultyLabel] || 0) + 1;
     },
 
-    // 行為型勳章（存入 behaviorBadges 欄位）
+    // 行為型勳章
     unlockBehaviorBadge(name, badgeName) {
-        if (!name || !name.trim() || name.trim() === '守護員') return;
-        const data = this.load(name);
-        if (!data.behaviorBadges) data.behaviorBadges = [];
-        if (!data.behaviorBadges.includes(badgeName)) {
-            data.behaviorBadges.push(badgeName);
-            this.save(name, data);
+        if (!this._state.behaviorBadges.includes(badgeName)) {
+            this._state.behaviorBadges.push(badgeName);
+            this._newlyUnlocked.behaviorBadges.push(badgeName);
         }
     }
 };
+
+// 收到平台資料後，立刻把已擁有的徽章回填進 progress（不用等玩家開牌局）
+if (typeof PLATFORM !== 'undefined') {
+    PLATFORM.onReady(function () { progress.syncFromPlatform(PLATFORM.badgeIds); });
+}
 
 let roundChatCount = 0; // 每回合對話上限計數器（上限 2）
 let sfxEnabled = sessionStorage.getItem("sfxEnabled") !== "false";
@@ -1249,6 +1248,7 @@ function initGame(lockedLocationId) {
     // 啟動音樂與日誌
     document.getElementById("music-control").style.display = "flex";
 	document.getElementById("report-control").style.display = "flex";
+	document.getElementById("exit-control").style.display = "flex";
     document.getElementById("log-btn").style.display = "flex";
     document.getElementById("collection-btn").style.display = "flex";
     document.getElementById("power-save-control").style.display = "flex";

@@ -353,7 +353,7 @@ let tourStep = 0;
 const TOUR_STEPS = [
     {
         highlight: null,
-        text: "嗨！我是導航魚🐟 歡迎來到海紋守護團！\n帶你快速認識畫面～",
+        text: "嗨！我是導航魚🐟 歡迎來到友魚守護團！\n帶你快速認識畫面～",
         next: true
     },
     {
