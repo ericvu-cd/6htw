@@ -353,6 +353,9 @@
 		font-size: .85rem;
 		font-family: "Microsoft JhengHei", sans-serif;
 		outline: none;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		-webkit-user-select: text;
 		user-select: text;
 		transition: border-color .2s;
@@ -421,7 +424,7 @@
 	#ws-weather-box {
 		position: absolute;
 		left: 12px;
-		top: 142px; /* 暱稱框下方 */
+		top: 158px; /* 暱稱框下方（原本 142px 間距太小，會蓋到暱稱框） */
 		max-width: 220px;
 		width: max-content;
 		background: rgba(4,14,30,0.8);
@@ -1189,7 +1192,7 @@
 	/**
 	 * 玩家按下「⚓ 守護漁港」後的啟航流程：
 	 *   1. 檢查是否已選港口、該港口是否仍開放（避免選完後天氣事件才把它關閉的競態狀況）
-	 *   2. 記住暱稱（localStorage）、把目前設定（暱稱/結算報告開關）同步給 main.js
+	 *   2. 暱稱固定來自平台（不再讀輸入框/localStorage），把目前設定（結算報告開關）同步給 main.js
 	 *   3. 視覺效果：以選中漁港的螢幕座標為縮放中心（transform-origin），
 	 *      把整個 welcome-screen 放大 2.5 倍並淡出，製造「鏡頭推近港口」的轉場感
 	 *   4. 轉場動畫結束（3.05 秒）後才呼叫 main.js 的 initGame() 正式開局

@@ -18,7 +18,7 @@ function showWinScreen(winner) {
     // ── 行為型勳章判斷，追蹤本局新解鎖 ──
     const newlyUnlockedBadges = [];
 
-    if (isPlayer && typeof badgeTracker !== "undefined") {
+    if (typeof badgeTracker !== "undefined") {
         const cards = badgeTracker.playerCards;
         const total = cards.length;
         const playerName = window.playerName;
@@ -36,19 +36,19 @@ function showWinScreen(winner) {
 
             if (total >= 3 && allCards.every(f => f.l === 1)) checkAndUnlock("綠燈先鋒");
             if (allCards.filter(f => f.m.includes("一支釣")).length >= 4) checkAndUnlock("一支釣達人");
-            if (allCards.every(f => f.l === 1) && allSuccess && total >= 3) checkAndUnlock("完美永續局");
+            if (isPlayer && allCards.every(f => f.l === 1) && allSuccess && total >= 3) checkAndUnlock("完美永續局");
             if (allCards.filter(f => f.l === 3).length >= 3) checkAndUnlock("紅燈護送員");
             if (allCards.filter(f => f.d === "養殖").length >= 3) checkAndUnlock("養殖支持者");
             if (allCards.some(f => f.n === "鯨鯊")) checkAndUnlock("深海傳說");
-            if (badgeTracker.returnCount >= 3) checkAndUnlock("浴火重生");
-            if (allSuccess && total >= 4) checkAndUnlock("百發百中");
+            if (isPlayer && badgeTracker.returnCount >= 3) checkAndUnlock("浴火重生");
+            if (isPlayer && allSuccess && total >= 4) checkAndUnlock("百發百中");
             const uniqueGreenSed = [...new Set(allCards.filter(f => f.l === 1 && f.h === "定棲性").map(f => f.n))];
             if (uniqueGreenSed.length >= 3) checkAndUnlock("珊瑚守護者");
             if (new Set(allCards.flatMap(f => f.m)).size >= 5) checkAndUnlock("漁法通");
-            if (total >= 4 && allCards.every(f => f.d === "近海") && allSuccess) checkAndUnlock("近海英雄");
+            if (isPlayer && total >= 4 && allCards.every(f => f.d === "近海") && allSuccess) checkAndUnlock("近海英雄");
             const isPerfect  = allCards.every(f => f.l === 1) && allSuccess && total >= 3;
             const isBullseye = allSuccess && total >= 4;
-            if (isPerfect && isBullseye && badgeTracker.returnCount >= 3) checkAndUnlock("海紋守護王");
+            if (isPlayer && isPerfect && isBullseye && badgeTracker.returnCount >= 3) checkAndUnlock("海紋守護王");
         }
     }
 
