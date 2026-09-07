@@ -720,7 +720,6 @@
 		<div id="ws-topbar">
 			<div id="ws-top-title">
 				<div id="ws-title-text">台灣海線任務</div>
-				<div id="ws-lb-btn" onclick="openLeaderboard()" title="守護排行榜">🏆 排行榜</div>
 			</div>
 			<div id="ws-top-icons">
 				<div class="ws-icon-btn" id="ws-sfx-btn" onclick="wsToggleSound()" title="音效・音樂">🔊</div>

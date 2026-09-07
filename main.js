@@ -1169,7 +1169,6 @@ function initGame(lockedLocationId) {
 	document.getElementById("report-control").style.display = "flex";
 	document.getElementById("exit-control").style.display = "flex";
     document.getElementById("log-btn").style.display = "flex";
-    document.getElementById("collection-btn").style.display = "flex";
     document.getElementById("power-save-control").style.display = "flex";
     document.getElementById("leaderboard-control").style.display = "flex";
     applyPowerSaveMode();
