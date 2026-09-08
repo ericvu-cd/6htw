@@ -504,7 +504,7 @@ function _makeCloseButton(isPlayer) {
         background:rgba(255,255,255,.06);
         color:rgba(255,255,255,.65);
     `;
-    btnClose.textContent = "🔚 關閉，返回平台";
+    btnClose.innerHTML = '<span style="filter: brightness(1.4) saturate(1.3);">🔚</span> 關閉，返回平台';
     btnClose.onclick = () => { if (typeof closeTaskToPlatform === "function") closeTaskToPlatform(); };
     return btnClose;
 }
