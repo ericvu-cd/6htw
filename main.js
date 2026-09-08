@@ -160,6 +160,10 @@ let powerSaveMode = (function () {
 function applyPowerSaveMode() {
     const vid = document.getElementById("ocean-bg-video");
     const btn = document.getElementById("power-save-control");
+
+    // 讓 CSS 知道目前是不是省電模式：手牌固定停在資訊頁、不播翻轉過場（見 style.css）
+    document.body.classList.toggle("power-save", powerSaveMode);
+
     if (powerSaveMode) {
         if (vid && !vid.paused) vid.pause(); // 直接凍結在目前這一幀，不用另外準備靜態圖
         if (btn) { btn.innerText = "🔋"; btn.style.opacity = "1"; btn.title = "省電模式：開（點擊關閉）"; }
@@ -170,6 +174,12 @@ function applyPowerSaveMode() {
             vid.play().catch(() => {});
         }
         if (btn) { btn.innerText = "🔋"; btn.style.opacity = "0.4"; btn.title = "省電模式：關（點擊開啟）"; }
+    }
+
+    // 立刻重繪 AI 頭像，讓「動態 webp ↔ 靜態 jpg」的切換即時生效，
+    // 不用等下一次回合更新（players 還沒建立時略過，例如還在歡迎畫面就先切換）。
+    if (typeof players !== "undefined" && players.length && typeof renderAIStatus === "function") {
+        renderAIStatus();
     }
 }
 
@@ -821,7 +831,9 @@ function renderAIStatus() {
                 </span>`;
 
             // 預設用靜態 jpg，只有正在出牌的那位 AI（activeAIIdx 對到的 index）才切換成動態 webp。
-            const avatarHtml = (i === activeAIIdx) ? p.avatarWebp : p.avatarJpg;
+            // 省電模式時一律維持靜態 jpg：動態 WebP 走的是 CPU 軟體解碼（沒有硬體加速），
+            // 600x600 的圖持續解碼相當耗電，而畫面上實際只顯示成小圓形頭像。
+            const avatarHtml = (i === activeAIIdx && !powerSaveMode) ? p.avatarWebp : p.avatarJpg;
 
             document.getElementById(p.id).innerHTML = `
                 <div class="avatar-img">${avatarHtml}</div>
@@ -840,14 +852,23 @@ function renderAIStatus() {
     }
 }
 
-function renderUI() {
+// ── 手牌翻面狀態 ──
+// 玩家回合結束後，資訊頁要多停留多久才翻回魚圖頁（毫秒）。設 0 就是立刻翻回去。
+const FLIP_BACK_DELAY = 3500;
+let _cardsShowingInfo = false;      // 目前畫面上手牌是不是停在資訊頁
+let _prevCardsShowingInfo = false;  // 上一次 renderUI 時的狀態，用來判斷要不要播翻轉動畫
+let _flipBackTimer = null;          // 「稍後翻回魚圖頁」的計時器
 
+function renderUI() {
     renderAIStatus();
 
 	const handEl = document.getElementById("player-hand");
     handEl.innerHTML = "";
 
     const isNormalTask = currentS && !currentS.isMazu && phase === "PLAYER_TURN" && callerIdx === 0;
+    // 需要玩家出牌時翻到資訊頁（看特性標籤方便決定出哪張），其餘時間停在魚圖頁。
+    // 省電模式不受這裡影響：CSS 會固定讓它停在資訊頁、不播翻轉（見 style.css）。
+    const showInfoSide = phase === "PLAYER_TURN" || phase === "PLAYER_MAZU";
 
     players[0].hand.forEach((f, idx) => {
         const c = document.createElement("div");
@@ -878,6 +899,39 @@ function renderUI() {
 
         handEl.appendChild(c);
     });
+
+    // ── 翻面控制 ──
+    // 玩家回合結束後不立刻翻回魚圖頁，而是讓資訊頁多停留 FLIP_BACK_DELAY 毫秒——
+    // 出完牌馬上翻回去太快，玩家還來不及看清楚剛剛那張牌的特性標籤。
+    if (showInfoSide) {
+        clearTimeout(_flipBackTimer);   // 回到玩家回合，取消還沒執行的「翻回去」
+        _flipBackTimer = null;
+        _cardsShowingInfo = true;
+    } else if (_cardsShowingInfo && !_flipBackTimer) {
+        // 剛離開玩家回合：先維持資訊頁，等一段時間後才翻回魚圖頁
+        _flipBackTimer = setTimeout(() => {
+            _flipBackTimer = null;
+            _cardsShowingInfo = false;
+            _prevCardsShowingInfo = false;
+            document.querySelectorAll("#player-hand .card-auto-flip")
+                .forEach(el => el.classList.remove("card-show-info"));
+        }, FLIP_BACK_DELAY);
+    }
+
+    if (_cardsShowingInfo) {
+        if (_prevCardsShowingInfo) {
+            // 上一次渲染就已經是資訊頁了 → 這次只是普通重繪（例如出完牌後更新手牌），
+            // 直接以資訊頁的樣子呈現，不要再播一次翻轉動畫。class 在元素還沒進到畫面前
+            // 就加上，瀏覽器會當成初始狀態，不會觸發 transition。
+            handEl.querySelectorAll(".card-auto-flip").forEach(el => el.classList.add("card-show-info"));
+        } else {
+            // 狀態從魚圖頁 → 資訊頁：等進到 DOM 後的下一幀才加 class，才播得出翻轉過場。
+            requestAnimationFrame(() => {
+                handEl.querySelectorAll(".card-auto-flip").forEach(el => el.classList.add("card-show-info"));
+            });
+        }
+    }
+    _prevCardsShowingInfo = _cardsShowingInfo;
     // 玩家回合時強高亮手牌區
     const isMyTurn = phase === "PLAYER_TURN" || phase === "PLAYER_MAZU";
     document.getElementById("player-zone").classList.toggle("my-turn", isMyTurn);
@@ -1218,6 +1272,12 @@ function initGame(lockedLocationId) {
  *   6. 渲染畫面並在 2 秒後呼叫 autoStep() 開始第一回合
  */
 function startGame() {
+    // 保險：清掉上一局可能殘留的手牌翻面狀態，確保開局一定是魚圖頁
+    clearTimeout(_flipBackTimer);
+    _flipBackTimer = null;
+    _cardsShowingInfo = false;
+    _prevCardsShowingInfo = false;
+
 // 1. 從資料庫中隨機挑選 3 個角色
     let aiPool = shuffle([...characterDB]).slice(0, 3);
     

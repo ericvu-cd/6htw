@@ -709,6 +709,11 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 .card.flipped,
 .card.card-auto-flip {
     transform-style: preserve-3d;
+}
+/* will-change 只在「正在翻轉的那一刻」才需要：手牌現在改成依回合切換翻面
+   （見下方 .card-show-info），不再是無限循環動畫，所以不必永久掛著這個提示。
+   省電模式下固定停在資訊頁、根本不翻，更不需要。 */
+#player-hand .card.card-auto-flip.card-show-info {
     will-change: transform;
 }
 
@@ -750,14 +755,23 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     transform: rotateY(180deg);
 }
 
-/* CSS 自動翻牌動畫：取代 JS setInterval，由合成器執行不佔主執行緒 */
-@keyframes cardFlipCycle {
-    0%, 45%   { transform: rotateY(0deg); }
-    50%, 95%  { transform: rotateY(180deg); }
-    100%      { transform: rotateY(0deg); }
-}
+/* ── 手牌翻面：改成「依玩家回合狀態切換」，取代原本 10 秒一輪的無限循環動畫 ──
+   原本每張手牌都掛著 cardFlipCycle infinite，7 張牌 × 正反兩面 = 十幾個 3D 合成層
+   永遠在旋轉，是遊戲進行中最大的 GPU 負擔與耗電來源。現在只有真的需要切換時才動：
+     - 開局預設／非玩家回合 → 魚圖頁（正面）
+     - 輪到玩家出牌         → 資訊頁（背面，看特性標籤方便決定出哪張）
+     - 省電模式             → 固定停在資訊頁，回合結束不翻回去，完全不產生翻轉動畫
+   切換由 main.js renderUI() 加/移除 .card-show-info 這個 class 控制。 */
 #player-hand .card.card-auto-flip {
-    animation: cardFlipCycle 10s ease-in-out infinite;
+    transition: transform .5s ease-in-out;
+}
+#player-hand .card.card-auto-flip.card-show-info {
+    transform: rotateY(180deg);
+}
+/* 省電模式：直接停在資訊頁，連翻轉過場都不播 */
+body.power-save #player-hand .card.card-auto-flip {
+    transition: none;
+    transform: rotateY(180deg);
 }
 
 /* 反面：魚名下方的特性標籤容器 */
@@ -872,6 +886,13 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     transition: transform 0.08s ease, box-shadow 0.08s ease !important;
 }
 #player-hand .card.flipped:active {
+    transform: rotateY(180deg) translateY(3px) !important;
+}
+/* 停在資訊頁時被按下：上面的 .card:active 會用 !important 把整個 transform 換成
+   translateY(3px)，rotateY(180deg) 會不見、卡片瞬間翻回正面又翻回去。這裡把兩個
+   變換寫在一起，按壓回饋才不會意外觸發翻牌動作。 */
+#player-hand .card.card-auto-flip.card-show-info:active,
+body.power-save #player-hand .card.card-auto-flip:active {
     transform: rotateY(180deg) translateY(3px) !important;
 }
 
@@ -1233,8 +1254,8 @@ body.desktop-mode #arrow-right:hover {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    width: 28px;
-    height: 50px;
+    width: 44px;
+    height: 66px;
     display: none;
     align-items: center;
     justify-content: center;
@@ -1247,42 +1268,36 @@ body.desktop-mode #arrow-right:hover {
 #arrow-left  { left: 0; background: linear-gradient(to right, rgba(0,10,30,0.6), rgba(0,10,30,0.0)); }
 #arrow-right { right: 0; background: linear-gradient(to left,  rgba(0,10,30,0.6), rgba(0,10,30,0.0)); }
 
-/* 三角形指示 */
+/* 三角形指示。原本靠 arrow-pulse 動畫閃爍來吸引注意，改成靜態之後
+   把三角形放大（原 8/11 → 現 18/24）、透明度提高，不靠動就看得清楚。 */
 .hand-arrow::after {
     content: "";
     display: block;
     width: 0;
     height: 0;
-    border-top: 8px solid transparent;
-    border-bottom: 8px solid transparent;
+    border-top: 18px solid transparent;
+    border-bottom: 18px solid transparent;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
 }
 #arrow-right::after {
-    border-left: 11px solid rgba(255, 255, 255, 0.55);
+    border-left: 24px solid rgba(255, 255, 255, 0.9);
     margin-left: 4px;
 }
 #arrow-left::after {
-    border-right: 11px solid rgba(255, 255, 255, 0.55);
+    border-right: 24px solid rgba(255, 255, 255, 0.9);
     margin-right: 4px;
 }
 
 /* 玩家回合時箭頭更醒目但仍柔和 */
 #player-zone.my-turn #arrow-right::after {
-    border-left-color: rgba(255, 210, 120, 0.80);
+    border-left-color: rgba(255, 210, 120, 0.95);
 }
 #player-zone.my-turn #arrow-left::after {
-    border-right-color: rgba(255, 210, 120, 0.80);
+    border-right-color: rgba(255, 210, 120, 0.95);
 }
 
-@keyframes arrow-pulse-right {
-    0%, 100% { opacity: 0.5; transform: translateY(-50%) translateX(0); }
-    50%       { opacity: 1;   transform: translateY(-50%) translateX(3px); }
-}
-@keyframes arrow-pulse-left {
-    0%, 100% { opacity: 0.5; transform: translateY(-50%) translateX(0); }
-    50%       { opacity: 1;   transform: translateY(-50%) translateX(-3px); }
-}
-#arrow-right { animation: arrow-pulse-right 1.6s ease-in-out infinite; }
-#arrow-left  { animation: arrow-pulse-left  1.6s ease-in-out infinite; }
+/* 已移除 arrow-pulse-right / arrow-pulse-left 的 infinite 脈動動畫（耗電），
+   改用上面放大＋提高不透明度的靜態樣式來維持辨識度。 */
 
 /* 讓手牌區可以水平滾動 */
 #player-hand {
