@@ -100,15 +100,23 @@ function reportComplete(coins, badgeId) {
 // （不要拆成一枚一枚各自送——拆開送會變成好幾次「各自獨立」的訊息處理，彼此併發
 // 搶著讀寫同一份使用者文件，就是先前「解鎖3個徽章、只有1個真的存進後台」的成因。
 // 合併成一則之後，後台 tasks.js 是用 for...await 依序處理同一則訊息裡的 badgeIds，
-// 不會有併發問題）。coins 上限抓 MAX_SINGLE_TX()=20（跟 firestore.rules 一致），
-// 一次解鎖很多枚時金幣會被封頂，不會因為超過單筆上限被後台拒絕整筆。
-function reportNewBadges(newlyUnlocked, extraCoins) {
-    const ids = []
-        .concat((newlyUnlocked.badges || []).map(function (n) { return platformBadgeId('harbor', n); }))
-        .concat((newlyUnlocked.behaviorBadges || []).map(function (n) { return platformBadgeId('behavior', n); }))
-        .concat((newlyUnlocked.fish || []).map(function (n) { return platformBadgeId('fish', n); }));
+// 不會有併發問題）。
+// 首次取得各類徽章的金幣：漁港章 +3、魚紋章 +1、行為勳章 +8（數量多、門檻低，
+// 單枚價值低一點；行為勳章要達成特定條件才拿得到，價值最高）。
+// coins 上限抓 MAX_SINGLE_TX()=20（跟 firestore.rules 一致），一次解鎖很多枚時
+// 金幣會被封頂，不會因為超過單筆上限被後台拒絕整筆。
+const BADGE_COIN_VALUE = { harbor: 3, fish: 1, behavior: 8 };
 
-    const coins = Math.min(ids.length * 10 + (extraCoins || 0), 20);
+function reportNewBadges(newlyUnlocked, extraCoins) {
+    const harborIds = (newlyUnlocked.badges || []).map(function (n) { return platformBadgeId('harbor', n); });
+    const behaviorIds = (newlyUnlocked.behaviorBadges || []).map(function (n) { return platformBadgeId('behavior', n); });
+    const fishIds = (newlyUnlocked.fish || []).map(function (n) { return platformBadgeId('fish', n); });
+    const ids = [].concat(harborIds, behaviorIds, fishIds);
+
+    const badgeCoins = harborIds.length * BADGE_COIN_VALUE.harbor
+        + fishIds.length * BADGE_COIN_VALUE.fish
+        + behaviorIds.length * BADGE_COIN_VALUE.behavior;
+    const coins = Math.min(badgeCoins + (extraCoins || 0), 20);
     if (ids.length === 0 && coins <= 0) return ids;
     sendToPlatform('complete', coins > 0 ? { coins: coins, badgeIds: ids } : { badgeIds: ids });
     return ids;
