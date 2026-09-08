@@ -8,11 +8,13 @@ function showWinScreen(winner) {
     // ── 勝利獎勵：直接發金幣（不再用「難度章/勝場數」這種需要另外找地方持久保存的
     // 收集項目——金幣本來就是平台 Firestore 錢包裡的東西，天生就是永久累加、不會
     // 因為關掉分頁或平台沒有對應欄位而消失，勝場數要「找地方放」最自然的位置就是這裡）。
-    // 金額沿用原本 db.js difficultyDB 的 winBonus（新手+1／標準+2／專業+3），
-    // 每贏一局都會真的送一次，不限次數。
-    if (isPlayer && typeof reportComplete === "function") {
-        const winBonus = getDifficultyInfo(gameDifficulty).winBonus || 0;
-        if (winBonus > 0) reportComplete(winBonus);
+    // 金額沿用原本 db.js difficultyDB 的 winBonus（新手+1／標準+2／專業+3）。
+    // 先記下來，不在這裡單獨送出——稍後會跟徽章、破紀錄金幣合併成同一則 complete 訊息
+    // 一次送出（見下面「這局結算」區塊），避免同一局結束時连續送好幾則訊息互相搶著
+    // 處理同一份使用者文件。
+    let winCoins = 0;
+    if (isPlayer) {
+        winCoins = getDifficultyInfo(gameDifficulty).winBonus || 0;
     }
 
     // ── 行為型勳章判斷，追蹤本局新解鎖 ──
@@ -52,18 +54,33 @@ function showWinScreen(winner) {
         }
     }
 
-    // ── 這局結算：把本局新解鎖的漁港章／魚紋章／行為勳章一次送給平台，
+    // ── 這局結算：把本局新解鎖的漁港章／魚紋章／行為勳章，跟「破紀錄+1金幣」
+    // 合併成同一則 complete 訊息一次送給平台（理由見 platform.js 的 reportNewBadges
+    // 註解——合併成一則，後台才會依序處理、不會併發搶同一份使用者文件）。
     // 送出去之後才把 progress._pending 併進 progress._confirmed——從這一刻起，
     // 「我的海紋收集」「我的收藏進度」畫面才會顯示這些新項目，之前都只是暫存、不顯示。
     // 這裡不看 isPlayer（不限定玩家要贏）：漁港章／魚紋章只要玩過這局就會有，
     // 輸贏都該正常送出、正常顯示；行為勳章本來就只有玩家獲勝時才會進到 _pending
     // （見上方 checkAndUnlock 只在 isPlayer 時執行），輸的話這裡自然是空陣列。
     if (typeof reportNewBadges === "function") {
-        reportNewBadges(progress._pending);
+        const pendingSnapshot = progress._pending;
         progress.commitPending();
-        if (typeof computeCollectionStats === "function" && typeof reportScoreIfHigher === "function") {
+
+        let extraCoins = winCoins;
+        let newTotalScore = null;
+        if (typeof computeCollectionStats === "function") {
             const _stats = computeCollectionStats(window.playerName);
-            reportScoreIfHigher(_stats.totalScore);
+            newTotalScore = _stats.totalScore;
+            if (typeof PLATFORM !== "undefined") {
+                const isFirstTime = PLATFORM.myScore === null;
+                if (!isFirstTime && newTotalScore > PLATFORM.myScore) extraCoins += 1;
+            }
+        }
+
+        reportNewBadges(pendingSnapshot, extraCoins);
+
+        if (newTotalScore !== null && typeof reportScoreIfHigher === "function") {
+            reportScoreIfHigher(newTotalScore); // 內部只送 score 訊息本身，不再重複送破紀錄金幣
         }
     }
 

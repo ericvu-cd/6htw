@@ -96,28 +96,34 @@ function reportComplete(coins, badgeId) {
     sendToPlatform('complete', payload);
 }
 
-// 把「本局新解鎖」的漁港章／行為勳章／魚紋章，逐一轉成平台徽章 ID 並各自回報（各 +10 金幣）。
-// 規格明確允許「每次獲得一個都可以各自送一次 complete」，已擁有的平台會自動跳過不重複發放。
-function reportNewBadges(newlyUnlocked) {
+// 把「本局新解鎖」的漁港章／行為勳章／魚紋章，合併成同一則 complete 訊息一次送出
+// （不要拆成一枚一枚各自送——拆開送會變成好幾次「各自獨立」的訊息處理，彼此併發
+// 搶著讀寫同一份使用者文件，就是先前「解鎖3個徽章、只有1個真的存進後台」的成因。
+// 合併成一則之後，後台 tasks.js 是用 for...await 依序處理同一則訊息裡的 badgeIds，
+// 不會有併發問題）。coins 上限抓 MAX_SINGLE_TX()=20（跟 firestore.rules 一致），
+// 一次解鎖很多枚時金幣會被封頂，不會因為超過單筆上限被後台拒絕整筆。
+function reportNewBadges(newlyUnlocked, extraCoins) {
     const ids = []
         .concat((newlyUnlocked.badges || []).map(function (n) { return platformBadgeId('harbor', n); }))
         .concat((newlyUnlocked.behaviorBadges || []).map(function (n) { return platformBadgeId('behavior', n); }))
         .concat((newlyUnlocked.fish || []).map(function (n) { return platformBadgeId('fish', n); }));
-    ids.forEach(function (id) { reportComplete(10, id); });
+
+    const coins = Math.min(ids.length * 10 + (extraCoins || 0), 20);
+    if (ids.length === 0 && coins <= 0) return ids;
+    sendToPlatform('complete', coins > 0 ? { coins: coins, badgeIds: ids } : { badgeIds: ids });
     return ids;
 }
 
-/* ── 任務 → 平台：score + 破紀錄金幣 ──
-   只有比目前已知的個人最佳分數更高，才會真的送出（跟平台 submitLeaderboardScore 的規則一致，
-   這裡先在前端擋一次可以少送幾次沒意義的訊息；平台那邊本來就會再檔一次比大小）。
-   第一次玩（myScore 是 null）不算破紀錄，不給那 +1 金幣，只上傳分數本身。 */
+/* ── 任務 → 平台：score（排行榜分數） ──
+   只有比目前已知的個人最佳分數更高，才會真的送出；平台那邊本來就會再擋一次比大小。
+   破紀錄的 +1 金幣不在這裡送，是合併進 win-screen.js 那則 complete 訊息裡一起送出
+   （理由見 platform.js 上面 reportNewBadges 的註解——避免又多一則訊息造成併發衝突）。 */
 function reportScoreIfHigher(totalScore) {
     if (typeof totalScore !== 'number') return;
     const isFirstTime = PLATFORM.myScore === null;
     if (!isFirstTime && totalScore <= PLATFORM.myScore) return;
 
     sendToPlatform('score', { scoreLabel: totalScore + ' 分', scoreValue: totalScore });
-    if (!isFirstTime) reportComplete(1);
     PLATFORM.myScore = totalScore; // 樂觀更新本地暫存的「目前最佳」，讓同一個連線內下一局比較基準跟著變
 }
 
