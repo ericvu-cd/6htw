@@ -394,7 +394,7 @@ function showWinScreen(winner) {
     // ── 按鈕區 ──
     const btnZone = document.createElement("div");
     btnZone.style.cssText = `
-        display:flex;flex-direction:column;align-items:center;gap:12px;
+        display:flex;flex-direction:column;align-items:center;gap:9px;
         width:100%;max-width:340px;
         animation:winFadeUp .65s ${hasNewBadge ? '.55s' : '.4s'} both;
     `;
@@ -404,8 +404,8 @@ function showWinScreen(winner) {
         // 分享是主角
         const btnShare = document.createElement("button");
         btnShare.style.cssText = `
-            width:100%;padding:19px;border-radius:50px;border:none;cursor:pointer;
-            font-size:1.15rem;font-weight:900;letter-spacing:.5px;
+            width:100%;padding:13px;border-radius:50px;border:none;cursor:pointer;
+            font-size:.98rem;font-weight:900;letter-spacing:.3px;
             font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
             background:linear-gradient(135deg,#ffd060,#ff8c42);
             color:#3a1800;
@@ -416,27 +416,14 @@ function showWinScreen(winner) {
         btnShare.onclick = () => shareAchievementCard(isPlayer, winner, newlyUnlockedBadges[currentBadgeIdx]);
         btnZone.appendChild(btnShare);
 
-        // 重新啟航是次要
-        const btnRestart = document.createElement("button");
-        btnRestart.style.cssText = `
-            width:100%;padding:15px;border-radius:50px;cursor:pointer;
-            font-size:1rem;font-weight:700;letter-spacing:.3px;
-            font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
-            border:1.5px solid rgba(255,210,80,.45);
-            background:rgba(255,180,40,.12);
-            color:rgba(255,240,160,.92);
-        `;
-        btnRestart.textContent = "↺ 重新啟航冒險";
-        btnRestart.onclick = () => _restartGame(winBgm, gameBgm, particleTimer);
-        btnZone.appendChild(btnRestart);
         btnZone.appendChild(_makeCloseButton(isPlayer));
 
     } else {
         // 無新勳章：分享是主角
         const btnShare = document.createElement("button");
         btnShare.style.cssText = `
-            width:100%;padding:19px;border-radius:50px;border:none;cursor:pointer;
-            font-size:1.15rem;font-weight:900;letter-spacing:.5px;
+            width:100%;padding:13px;border-radius:50px;border:none;cursor:pointer;
+            font-size:.98rem;font-weight:900;letter-spacing:.3px;
             font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
             ${isPlayer
                 ? 'background:linear-gradient(135deg,#ffd060,#ff8c42);color:#3a1800;animation:winSharePulse 2.4s ease-in-out infinite;'
@@ -446,19 +433,6 @@ function showWinScreen(winner) {
         btnShare.onclick = () => shareGameCard(isPlayer, winner);
         btnZone.appendChild(btnShare);
 
-        // 重新啟航是次要
-        const btnRestart = document.createElement("button");
-        btnRestart.style.cssText = `
-            width:100%;padding:15px;border-radius:50px;cursor:pointer;
-            font-size:1rem;font-weight:700;letter-spacing:.3px;
-            font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
-            border:1.5px solid ${isPlayer?'rgba(255,210,80,.4)':'rgba(100,165,255,.4)'};
-            background:${isPlayer?'rgba(255,180,40,.1)':'rgba(60,100,200,.1)'};
-            color:${isPlayer?'rgba(255,240,160,.9)':'rgba(158,208,255,.9)'};
-        `;
-        btnRestart.textContent = "↺ 重新啟航冒險";
-        btnRestart.onclick = () => _restartGame(winBgm, gameBgm, particleTimer);
-        btnZone.appendChild(btnRestart);
         btnZone.appendChild(_makeCloseButton(isPlayer));
     }
 
@@ -497,8 +471,8 @@ function showWinScreen(winner) {
 function _makeCloseButton(isPlayer) {
     const btnClose = document.createElement("button");
     btnClose.style.cssText = `
-        width:100%;padding:13px;border-radius:50px;cursor:pointer;
-        font-size:.95rem;font-weight:700;letter-spacing:.3px;
+        width:100%;padding:10px;border-radius:50px;cursor:pointer;
+        font-size:.85rem;font-weight:700;letter-spacing:.2px;
         font-family:"Microsoft JhengHei","PingFang TC",sans-serif;
         border:1.5px solid rgba(255,255,255,.18);
         background:rgba(255,255,255,.06);
