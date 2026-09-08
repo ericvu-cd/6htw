@@ -139,6 +139,17 @@ function closeTaskToPlatform() {
     exitToPlatform();
 }
 
+// ── 攔截瀏覽器「上一頁」（含手機滑動返回手勢）：不要讓它直接把分頁導覽走 ──
+// 原理：先塞一筆假的瀏覽紀錄，使用者按上一頁時只會觸發 popstate（不會真的離開），
+// 這時候把假紀錄補回去、跳我們自己的確認視窗；確定要走才真的送 exit + 關閉分頁。
+if (typeof window !== 'undefined' && window.history && window.history.pushState) {
+    history.pushState(null, '', location.href);
+    window.addEventListener('popstate', function () {
+        history.pushState(null, '', location.href); // 補回一筆，擋住這次「上一頁」
+        if (typeof confirmExitDuringGame === 'function') confirmExitDuringGame();
+    });
+}
+
 window.PLATFORM = PLATFORM;
 window.platformBadgeId = platformBadgeId;
 window.reportNewBadges = reportNewBadges;
