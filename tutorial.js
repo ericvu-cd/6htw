@@ -424,8 +424,10 @@ function startTutorial() {
     if (welcome) welcome.style.display = "none";
 
     document.getElementById("summon-display").style.display = "none";
-    document.getElementById("deck-info").style.display      = "none";
-    document.getElementById("log-btn").style.display        = "none";
+    // 剩餘召喚數與出牌記錄已移進頂端中央群組，整組一起隱藏即可
+    // 用 visibility 而非 display 隱藏：中央群組在 flex 列裡佔一個位置，
+    // 用 display:none 會讓左右兩組的位置跟著跑掉。
+    document.getElementById("top-center-group").style.visibility = "hidden";
 
     document.body.classList.add("game-started");
     if (typeof initOceanVideo === "function") initOceanVideo("longfeng");
@@ -881,8 +883,8 @@ function tutorFinish() {
 
     const sumEl = document.getElementById("summon-display");
     if (sumEl) { sumEl.style.display = "none"; sumEl.classList.remove("mazu-glow"); }
-    document.getElementById("deck-info").style.display = "block";
-    document.getElementById("log-btn").style.display   = "flex";
+    // 還原頂端中央群組（必須是 flex，用 block 會破壞裡面三個元素的橫向排列）
+    document.getElementById("top-center-group").style.visibility = "";
 
     table    = [];
     document.getElementById("table").innerHTML = ""; // 同步清空桌面 DOM，避免舊卡片殘留畫面（見 main.js renderTable() 註解的清空契約）

@@ -36,6 +36,19 @@
 	<style>
 		body { background: #000; transition: background 0.8s ease; }
 		body.game-started { background: transparent; }
+
+		/* LOGO 防閃現：<img id="intro-logo"> 寫在下面的 HTML 裡，瀏覽器一解析到
+		   就會用「圖片原始尺寸」直接畫出來；但控制它尺寸與淡入的完整樣式是由
+		   intro.js 動態注入的，而 intro.js 排在所有 script 的最後才載入。
+		   中間這段空窗期會閃出一個超大的 LOGO，所以這裡先把最關鍵的兩個屬性
+		   （隱藏、限制寬度）寫在跟 HTML 一起解析的樣式區塊中擋住。
+		   intro.js 之後注入的完整樣式（含 transition/animation）會自然接手。 */
+		#intro-logo {
+			opacity: 0;
+			max-width: min(82vw, 720px);
+			width: 100%;
+			height: auto;
+		}
 	</style>
 
 </head>
@@ -96,21 +109,23 @@
         <source src="Below_the_Surface.mp3" type="audio/mpeg">
     </audio>
 
-    <!-- 頂端控制列：左＝返回平台／中＝收集榜／右＝省電、聲音、結算 -->
-    <div id="exit-control" onclick="confirmExitDuringGame()" title="返回平台" style="position:fixed; top:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; cursor:pointer; left:10px; font-size:18px; filter: brightness(1.9) saturate(1.8) drop-shadow(0 0 4px rgba(255,255,255,0.9));">
-        🔚
-    </div>
-    <div id="leaderboard-control" onclick="openLeaderboard()" title="我的收藏進度" style="position:fixed; top:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; cursor:pointer; left:50%; transform:translateX(-50%); font-size:20px;">
-        🏆
-    </div>
-    <div id="power-save-control" onclick="togglePowerSave()" title="省電模式" style="position:fixed; top:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; cursor:pointer; right:106px; font-size:20px; opacity:0.4;">
-        🔋
-    </div>
-    <div id="music-control" onclick="toggleMusic()" title="音樂" style="position:fixed; top:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; cursor:pointer; right:58px; font-size:20px;">
-        🎵
-    </div>
-    <div id="report-control" onclick="toggleReportMode()" title="結算報告" style="position:fixed; top:10px; z-index:2000; width:40px; height:40px; background:rgba(10,10,10,0.55); border:1px solid rgba(255,255,255,0.2); border-radius:50%; display:none; justify-content:center; align-items:center; cursor:pointer; right:10px; font-size:20px;">
-        📊
+    <!-- 頂端控制列：用 flex 一列排開，左／中／右三組自動分配空間，
+         不再各自絕對定位（6 個元素在手機寬度下用絕對置中一定會互相重疊）。
+         左＝返回平台／中＝收藏進度、剩餘召喚數、出牌記錄／右＝省電、聲音、結算 -->
+    <div id="top-bar">
+        <div class="top-group">
+            <div id="exit-control" onclick="confirmExitDuringGame()" title="返回平台">🔚</div>
+        </div>
+        <div class="top-group" id="top-center-group">
+            <div id="leaderboard-control" onclick="openLeaderboard()" title="我的收藏進度">🏆</div>
+            <div id="deck-info" title="剩餘召喚次數">🎴--</div>
+            <div id="log-btn" onclick="openLog()" title="出牌記錄">📜</div>
+        </div>
+        <div class="top-group">
+            <div id="power-save-control" onclick="togglePowerSave()" title="省電模式">🔋</div>
+            <div id="music-control" onclick="toggleMusic()" title="音樂">🎵</div>
+            <div id="report-control" onclick="toggleReportMode()" title="結算報告">📊</div>
+        </div>
     </div>
 	
     <div id="log-modal">
@@ -182,8 +197,6 @@
 		</div>
 
 		<div id="ocean">
-			<div id="deck-info">剩餘召喚卡: --</div>
-			<div id="log-btn" onclick="openLog()">📜出牌記錄</div>
 			<div id="summon-display"></div>
 			<div id="table"></div>
 		</div>

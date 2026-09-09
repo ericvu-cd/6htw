@@ -143,28 +143,7 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 }
 
 /* 歷史紀錄按鈕 */ 
-#log-btn {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    z-index: 2000;
-    background: rgba(0,20,60,0.75);
-    color: rgba(200,235,255,0.95);
-    padding: 4px 10px;
-    border-radius: 30px;
-    border: 1px solid rgba(100,180,255,0.25);
-    font-weight: bold;
-    font-size: 0.8rem;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    transition: 0.2s;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    white-space: nowrap;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-    height: auto;
-}
+/* 出牌記錄按鈕的外觀已整合進上方 #top-bar 的共用規則，這裡只保留 hover 效果 */
 #log-btn:active { transform: scale(0.95); }
 
 /* 彈出式日誌視窗：點 #log-btn 後由 main.js 切 display:flex 顯示，
@@ -510,7 +489,13 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 }
 
 /* 召喚訊息文字框（例如「召喚：黑鮪魚」），單行寫在一起沒有換行是原始寫法 */
-#summon-display { z-index: 205; position: relative; background: rgba(0,20,60,0.82); padding: 10px; border-radius: 12px; width: 92%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15); margin-bottom: 5px; font-weight: bold; min-height: 50px; border: 3px solid rgba(100,180,255,0.3); font-size: 1.05rem; color: #e0f4ff; display: flex; align-items: center; justify-content: center; line-height: 1.4; white-space: pre-wrap; box-sizing: border-box; transition: all 0.3s; text-shadow: 0 1px 8px rgba(0,0,0,0.8); }
+/* 召喚顯示框：固定高度，不隨文字長短變高變矮。
+   召喚卡文字最長 41 字、含換行最多會排到 4 行，所以高度抓 4 行的量
+   （4 × 23.5px 行高 + padding 20 + border 6 ≒ 120px）。
+   原本用 min-height 會讓框隨內容忽大忽小，連帶把下方出牌區推來推去。
+   萬一遇到更長的內容（例如極窄螢幕多折一行），用 overflow-y 捲動吸收，
+   不讓它撐開版面。transition 也拿掉 height，避免切換召喚卡時看到抽動。 */
+#summon-display { z-index: 205; position: relative; background: rgba(0,20,60,0.82); padding: 10px; border-radius: 12px; width: 92%; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15); margin-bottom: 5px; font-weight: bold; height: 120px; overflow-y: auto; border: 3px solid rgba(100,180,255,0.3); font-size: 1.05rem; color: #e0f4ff; display: flex; align-items: center; justify-content: center; line-height: 1.4; white-space: pre-wrap; box-sizing: border-box; transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; text-shadow: 0 1px 8px rgba(0,0,0,0.8); }
 
 /* 召喚聚焦遮罩：召喚發生時蓋滿全螢幕，把 #summon-display 的內容放大複製一份顯示在中間 */
 #summon-focus-overlay {
@@ -563,8 +548,111 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 }
 /* 桌面出牌區（AI/玩家出的牌會疊放在這裡） */
 #table { z-index: 5; position: relative; display: flex; gap: 6px; flex-grow: 1; min-height: 122px; align-items: center; width: 95%; justify-content: center; overflow-x: auto; }
-/* 左上角「剩餘召喚卡」計數牌 */
-#deck-info { position: absolute; top: 5px; left: 5px; background: rgba(252,230,127,0.6); color: rgba(200,235,255,0.95); padding: 4px 10px; border-radius: 30px; font-size: 0.8rem; font-weight: bold; z-index: 5; border: 1px solid rgba(100,180,255,0.25); text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+/* 頂端控制列：整列固定在畫面上方，用 flex 把「左／中／右」三組平均攤開。
+   六個元素若各自用絕對定位（尤其中間那組用 left:50%+translateX(-50%) 置中），
+   在手機寬度下一定會跟右側按鈕重疊，所以改成由 flex 自動分配空間。 */
+#top-bar {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 2000;
+    display: none;              /* 進遊戲後由 main.js 改成 flex */
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    pointer-events: none;       /* 列本身不擋點擊，只有按鈕可點 */
+}
+#top-bar .top-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    pointer-events: auto;
+}
+/* 🏆收藏進度是「跨局累積的個人收藏」，跟後面兩個「本局即時資訊」性質不同，
+   間距拉開一點，視覺上不會誤以為是同一組。 */
+#top-center-group #deck-info {
+    margin-left: 12px;
+}
+/* 頂端列裡的圖示按鈕共用外觀：統一底色、邊框、尺寸，視覺一致。
+   position:relative 是必要的——結算報告關閉時會用 inset:0 疊一個紅色 ✕ 在
+   圖示上，需要按鈕自己是定位基準，否則 ✕ 會跑到其他元素上面去。 */
+#top-bar #exit-control,
+#top-bar #leaderboard-control,
+#top-bar #log-btn,
+#top-bar #power-save-control,
+#top-bar #music-control,
+#top-bar #report-control,
+#top-bar #deck-info {
+    position: relative;
+    height: 40px;
+    flex: 0 0 auto;
+    background: rgba(10,10,10,0.55);
+    border: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+/* 圓形圖示按鈕 */
+#top-bar #exit-control,
+#top-bar #leaderboard-control,
+#top-bar #log-btn,
+#top-bar #power-save-control,
+#top-bar #music-control,
+#top-bar #report-control {
+    width: 40px;
+    border-radius: 50%;
+}
+#top-bar #exit-control {
+    font-size: 18px;
+    filter: brightness(1.9) saturate(1.8) drop-shadow(0 0 4px rgba(255,255,255,0.9));
+}
+#top-bar #power-save-control { opacity: 0.4; }
+
+/* 極窄螢幕（約 340px 以下的舊機型）：六個元素會擠不下，
+   把按鈕與間距等比縮小一級，確保不會換行或溢出。 */
+@media (max-width: 340px) {
+    #top-bar { gap: 4px; }
+    #top-bar .top-group { gap: 4px; }
+    #top-center-group #deck-info { margin-left: 8px; }
+    #top-bar #exit-control,
+    #top-bar #leaderboard-control,
+    #top-bar #log-btn,
+    #top-bar #power-save-control,
+    #top-bar #music-control,
+    #top-bar #report-control,
+    #top-bar #deck-info {
+        height: 34px;
+        font-size: 17px;
+    }
+    #top-bar #exit-control,
+    #top-bar #leaderboard-control,
+    #top-bar #log-btn,
+    #top-bar #power-save-control,
+    #top-bar #music-control,
+    #top-bar #report-control {
+        width: 34px;
+    }
+    #deck-info {
+        padding: 0 9px;
+        font-size: 0.78rem;
+    }
+}
+/* 剩餘召喚次數：沿用上面的共用外觀，只改成藥丸形＋較小字級。
+   文字精簡成「🎴數字」節省寬度，完整說明放在 title 提示。 */
+#deck-info {
+    padding: 0 12px;
+    border-radius: 30px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: rgba(220,240,255,0.95);
+    white-space: nowrap;
+    cursor: default;
+}
 
 /* 玩家區：極淡半透明 */
 #player-zone {

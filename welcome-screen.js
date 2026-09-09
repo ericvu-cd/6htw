@@ -83,7 +83,7 @@
 	}
 	#ws-title-text {
 		font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
-		font-size: clamp(.95rem, 3.5vw, 1.15rem);
+		font-size: clamp(1.15rem, 4.4vw, 1.4rem);
 		font-weight: 900;
 		color: #e0f0ff;
 		letter-spacing: .18em;
@@ -239,11 +239,11 @@
 	}
 	.ws-harbor .ws-h-label {
 		position: absolute;
-		top: 18px;
+		top: 21px; /* 字級放大到 1.2rem 後，跟圓點的間距跟著加大一點 */
 		left: 50%;
 		transform: translateX(-50%);
 		white-space: nowrap;
-		font-size: .94rem;
+		font-size: 1.2rem;
 		font-weight: 700;
 		color: #fff;
 		text-shadow: 0 1px 5px rgba(0,0,0,0.95), 0 0 8px rgba(0,0,0,0.8);
@@ -253,6 +253,12 @@
 	.ws-harbor.label-right .ws-h-label {
 		left: 14px;
 		transform: none;
+	}
+	/* 靠地圖最右側的漁港（南方澳 px:0.864）標籤置中會太貼近螢幕右邊，
+	   字級放大到 1.2rem 之後更明顯，這裡讓它整體往左偏移一些。 */
+	.ws-harbor.label-left .ws-h-label {
+		left: 50%;
+		transform: translateX(-72%);
 	}
 	/* 選中狀態 */
 	.ws-harbor.ws-selected .ws-h-core {
@@ -299,7 +305,7 @@
 		position: absolute;
 		right: 12px;
 		bottom: 36px; /* 版權列高度上方 */
-		width: 170px;
+		width: 210px;
 		max-height: calc(100vh - 36px - 64px); /* 扣掉頂部列與版權列，避免溢出螢幕 */
 		overflow-y: auto;
 		background: rgba(4, 14, 30, 0.8);
@@ -314,7 +320,7 @@
 	#ws-panel-hint {
 		text-align: center;
 		color: rgba(255,255,255,0.92);
-		font-size: .82rem;
+		font-size: 1rem;
 		line-height: 1.6;
 		padding: 12px 2px;
 	}
@@ -322,7 +328,7 @@
 		display: none;
 	}
 	#ws-panel-harbor-name {
-		font-size: .92rem;
+		font-size: 1.2rem;
 		font-weight: 700;
 		color: #e8f4ff;
 		margin-bottom: 1px;
@@ -337,7 +343,7 @@
 		margin-bottom: 9px;
 	}
 	.ws-panel-label {
-		font-size: .68rem;
+		font-size: 1rem;
 		letter-spacing: .1em;
 		color: rgba(100,170,210,0.7);
 		margin-bottom: 4px;
@@ -348,9 +354,9 @@
 		background: rgba(255,255,255,0.07);
 		border: 1px solid rgba(60,140,200,0.3);
 		border-radius: 8px;
-		padding: 7px 9px;
+		padding: 9px 11px;
 		color: #ffffff;
-		font-size: .85rem;
+		font-size: 1.1rem;
 		font-family: "Microsoft JhengHei", sans-serif;
 		outline: none;
 		white-space: nowrap;
@@ -383,8 +389,8 @@
 	#ws-name-box {
 		position: absolute;
 		left: 12px;
-		top: 64px; /* 頂部列高度下方 */
-		width: 150px;
+		top: 56px; /* 頂部列（52px）正下方 */
+		width: 196px;
 		background: rgba(4,14,30,0.8);
 		border: 1px solid rgba(60,140,200,0.25);
 		border-radius: 14px;
@@ -424,8 +430,8 @@
 	#ws-weather-box {
 		position: absolute;
 		left: 12px;
-		top: 158px; /* 暱稱框下方（原本 142px 間距太小，會蓋到暱稱框） */
-		max-width: 220px;
+		top: 158px; /* 暱稱框（top:56 + 高約90）下方，留約 12px 間距 */
+		max-width: 240px;
 		width: max-content;
 		background: rgba(4,14,30,0.8);
 		border: 1px solid rgba(60,140,200,0.25);
@@ -442,13 +448,13 @@
 	#ws-weather-box.show { opacity: 1; transform: translateY(0); }
 	#ws-weather-box { cursor: pointer; }
 	#ws-weather-label {
-		font-size: .66rem;
+		font-size: .9rem;
 		letter-spacing: .12em;
 		color: rgba(160,210,240,0.65);
 		margin-bottom: 3px;
 	}
 	#ws-weather-name {
-		font-size: .88rem;
+		font-size: 1.1rem;
 		font-weight: 700;
 		color: #e8f4ff;
 		white-space: nowrap;
@@ -513,12 +519,12 @@
 		z-index: 30;
 	}
 	.ws-sub-btn {
-		padding: 7px 13px;
+		padding: 9px 16px;
 		border-radius: 14px;
 		border: 1px solid rgba(100,180,220,0.28);
 		background: rgba(4,14,30,0.82);
 		color: rgba(160,215,245,0.85);
-		font-size: .88rem;
+		font-size: 1.1rem;
 		font-weight: 700;
 		cursor: pointer;
 		font-family: "Microsoft JhengHei", sans-serif;
@@ -742,7 +748,7 @@
 				<div class="ws-h-label">八斗子</div>
 			</div>
 			<!-- 宜蘭南方澳：東岸中上 -->
-			<div class="ws-harbor" id="wsh-nanfangao" data-id="nanfangao" onclick="wsSelectHarbor('nanfangao')">
+			<div class="ws-harbor label-left" id="wsh-nanfangao" data-id="nanfangao" onclick="wsSelectHarbor('nanfangao')">
 				<div class="ws-h-ring"></div>
 				<div class="ws-h-core"></div>
 				<div class="ws-h-label">南方澳</div>

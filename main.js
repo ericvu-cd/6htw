@@ -844,7 +844,9 @@ function renderAIStatus() {
     });
 
     const deckInfo = document.getElementById("deck-info");
-    deckInfo.innerText = `剩餘${deckS.length}次召喚`;
+    // 已移到頂端固定列，空間有限，文字精簡成「🎴數字」（原本是「剩餘N次召喚」）
+    deckInfo.innerText = `🎴${deckS.length}`;
+    deckInfo.title = `剩餘 ${deckS.length} 次召喚`;
     if (deckS.length <= 5) {
         deckInfo.classList.add("deck-danger");
     } else {
@@ -1225,12 +1227,9 @@ function initGame(lockedLocationId) {
     }
 	
     // 啟動音樂與日誌
-    document.getElementById("music-control").style.display = "flex";
-	document.getElementById("report-control").style.display = "flex";
-	document.getElementById("exit-control").style.display = "flex";
-    document.getElementById("log-btn").style.display = "flex";
-    document.getElementById("power-save-control").style.display = "flex";
-    document.getElementById("leaderboard-control").style.display = "flex";
+    // 頂端控制列（返回／收藏進度／召喚數／出牌記錄／省電／音樂／結算）整條一起顯示，
+    // 裡面各按鈕的外觀與排列都由 CSS 的 #top-bar 規則負責。
+    document.getElementById("top-bar").style.display = "flex";
     applyPowerSaveMode();
     const music = document.getElementById("bgm");
     const btn = document.getElementById("music-control");
