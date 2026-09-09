@@ -479,7 +479,9 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 #ocean {
     flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
     position: relative; margin: 5px 5px 0 5px; border-radius: 12px;
-    padding-top: 35px;
+    padding-top: 8px; /* 原本 35px：是留給以前絕對定位在這裡面的 #deck-info／#log-btn
+                          的淨空，那兩個現在都搬到畫面頂端的 #top-bar 去了，這裡不用再留
+                          那麼多，不然召喚框會憑空多一大截空白，看起來很怪。 */
     min-height: 0;
     background: transparent;
     z-index: 1;
@@ -566,13 +568,13 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 #top-bar .top-group {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     pointer-events: auto;
 }
 /* 🏆收藏進度是「跨局累積的個人收藏」，跟後面兩個「本局即時資訊」性質不同，
    間距拉開一點，視覺上不會誤以為是同一組。 */
 #top-center-group #deck-info {
-    margin-left: 12px;
+    margin-left: 10px;
 }
 /* 頂端列裡的圖示按鈕共用外觀：統一底色、邊框、尺寸，視覺一致。
    position:relative 是必要的——結算報告關閉時會用 inset:0 疊一個紅色 ✕ 在
@@ -584,15 +586,17 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 #top-bar #music-control,
 #top-bar #report-control,
 #top-bar #deck-info {
+    box-sizing: border-box;   /* 這份 CSS 沒有全域 border-box，不寫的話邊框會額外撐寬 2px，
+                                 七個元素累積起來就會超出螢幕、把最右邊的按鈕擠掉 */
     position: relative;
-    height: 40px;
+    height: 38px;
     flex: 0 0 auto;
     background: rgba(10,10,10,0.55);
     border: 1px solid rgba(255,255,255,0.2);
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 20px;
+    font-size: 19px;
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     text-shadow: 0 1px 4px rgba(0,0,0,0.8);
@@ -604,7 +608,7 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 #top-bar #power-save-control,
 #top-bar #music-control,
 #top-bar #report-control {
-    width: 40px;
+    width: 38px;
     border-radius: 50%;
 }
 #top-bar #exit-control {
@@ -615,10 +619,10 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 
 /* 極窄螢幕（約 340px 以下的舊機型）：六個元素會擠不下，
    把按鈕與間距等比縮小一級，確保不會換行或溢出。 */
-@media (max-width: 340px) {
-    #top-bar { gap: 4px; }
-    #top-bar .top-group { gap: 4px; }
-    #top-center-group #deck-info { margin-left: 8px; }
+@media (max-width: 359px) {
+    #top-bar { gap: 3px; }
+    #top-bar .top-group { gap: 3px; }
+    #top-center-group #deck-info { margin-left: 6px; }
     #top-bar #exit-control,
     #top-bar #leaderboard-control,
     #top-bar #log-btn,
@@ -626,8 +630,8 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     #top-bar #music-control,
     #top-bar #report-control,
     #top-bar #deck-info {
-        height: 34px;
-        font-size: 17px;
+        height: 33px;
+        font-size: 16px;
     }
     #top-bar #exit-control,
     #top-bar #leaderboard-control,
@@ -635,19 +639,19 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     #top-bar #power-save-control,
     #top-bar #music-control,
     #top-bar #report-control {
-        width: 34px;
+        width: 33px;
     }
     #deck-info {
-        padding: 0 9px;
-        font-size: 0.78rem;
+        padding: 0 7px;
+        font-size: 0.75rem;
     }
 }
 /* 剩餘召喚次數：沿用上面的共用外觀，只改成藥丸形＋較小字級。
    文字精簡成「🎴數字」節省寬度，完整說明放在 title 提示。 */
 #deck-info {
-    padding: 0 12px;
+    padding: 0 9px;
     border-radius: 30px;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     font-weight: bold;
     color: rgba(220,240,255,0.95);
     white-space: nowrap;

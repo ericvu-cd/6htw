@@ -305,13 +305,13 @@
 		position: absolute;
 		right: 12px;
 		bottom: 36px; /* 版權列高度上方 */
-		width: 210px;
+		width: 200px;
 		max-height: calc(100vh - 36px - 64px); /* 扣掉頂部列與版權列，避免溢出螢幕 */
 		overflow-y: auto;
 		background: rgba(4, 14, 30, 0.8);
 		border: 1px solid rgba(60,140,200,0.25);
 		border-radius: 16px;
-		padding: 12px 8px;
+		padding: 12px 4px;
 		z-index: 30;
 		backdrop-filter: blur(16px);
 		-webkit-backdrop-filter: blur(16px);
@@ -390,7 +390,7 @@
 		position: absolute;
 		left: 12px;
 		top: 56px; /* 頂部列（52px）正下方 */
-		width: 196px;
+		width: 186px;
 		background: rgba(4,14,30,0.8);
 		border: 1px solid rgba(60,140,200,0.25);
 		border-radius: 14px;
@@ -512,14 +512,14 @@
 	#ws-bottom-left {
 		position: absolute;
 		left: 12px;
-		bottom: 36px;
+		bottom: 30px; /* 往下移，緊貼版權列（高30px）上緣，讓東港標籤下方多一點淨空 */
 		display: flex;
 		flex-direction: column;
 		gap: 6px;
 		z-index: 30;
 	}
 	.ws-sub-btn {
-		padding: 9px 16px;
+		padding: 6px 16px; /* 上下padding減少，按鈕變矮，騰出空間給東港標籤 */
 		border-radius: 14px;
 		border: 1px solid rgba(100,180,220,0.28);
 		background: rgba(4,14,30,0.82);
