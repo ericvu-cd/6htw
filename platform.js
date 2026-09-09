@@ -103,7 +103,7 @@ function reportComplete(coins, badgeId) {
 // 不會有併發問題）。
 // 首次取得各類徽章的金幣：漁港章 +3、魚紋章 +1、行為勳章 +8（數量多、門檻低，
 // 單枚價值低一點；行為勳章要達成特定條件才拿得到，價值最高）。
-// coins 上限抓 MAX_SINGLE_TX()=20（跟 firestore.rules 一致），一次解鎖很多枚時
+// coins 上限抓 MAX_SINGLE_TX()=50（跟 firestore.rules 一致），一次解鎖很多枚時
 // 金幣會被封頂，不會因為超過單筆上限被後台拒絕整筆。
 const BADGE_COIN_VALUE = { harbor: 3, fish: 1, behavior: 8 };
 
@@ -116,7 +116,7 @@ function reportNewBadges(newlyUnlocked, extraCoins) {
     const badgeCoins = harborIds.length * BADGE_COIN_VALUE.harbor
         + fishIds.length * BADGE_COIN_VALUE.fish
         + behaviorIds.length * BADGE_COIN_VALUE.behavior;
-    const coins = Math.min(badgeCoins + (extraCoins || 0), 20);
+    const coins = Math.min(badgeCoins + (extraCoins || 0), 50);
     if (ids.length === 0 && coins <= 0) return ids;
     sendToPlatform('complete', coins > 0 ? { coins: coins, badgeIds: ids } : { badgeIds: ids });
     return ids;
