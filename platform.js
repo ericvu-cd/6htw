@@ -26,7 +26,16 @@ function platformBadgeId(category, name) {
 }
 
 const PLATFORM = {
-    connected: (typeof window !== 'undefined' && !!window.opener),
+    // ⚠️ 不能只看 window.opener——桌機/寬螢幕模式下，index.html 是被 desktop.html
+    // 用 <iframe> 包起來執行的（見 index.html 開頭的寬螢幕自動導向邏輯）。iframe 屬於
+    // 「巢狀框架」，跟 window.open() 開出來的「彈出視窗」是完全不同的兩件事，
+    // iframe 裡的 window.opener 永遠是 null，不會繼承外層視窗的 opener。
+    // window.top 在這種情境下會正確指向 desktop.html 自己的視窗，而那個視窗才是
+    // 真正被平台用 window.open() 開出來的，它的 .opener 才指得回平台。用
+    // (window.top || window).opener 兩種情境都能正確抓到，不會因為套了桌機外框
+    // 就整個跟平台斷線（斷線不會報錯、畫面照常顯示，但徽章/金幣/分數全部送不出去，
+    // 是最容易被忽略的一種靜默失敗）。
+    connected: (typeof window !== 'undefined' && !!(window.top || window).opener),
     ready: false,           // 是否已收到 player_info
     nickname: null,
     badgeIds: [],           // 平台回傳的「玩家擁有的全部徽章」（不分任務）
@@ -52,7 +61,7 @@ function sendToPlatform(type, payload) {
     if (!PLATFORM.connected) { console.log('[platform] (測試模式，未連接平台) ' + type, payload); return; }
     const msg = { source: 'culture-task', version: 1, taskId: TASK_ID, type: type };
     if (payload !== undefined) msg.payload = payload;
-    window.opener.postMessage(msg, '*');
+    (window.top || window).opener.postMessage(msg, '*');
 }
 
 // 小提示 Toast：優先用 welcome-screen.js 已有的 wsShowToast，沒有的話退回 console。
@@ -138,7 +147,10 @@ function reportScoreIfHigher(totalScore) {
 /* ── 任務 → 平台：exit（離開任務，回平台） ── */
 function exitToPlatform() {
     sendToPlatform('exit');
-    if (PLATFORM.connected) window.close();
+    // 桌機外框模式下要關的是 window.top（desktop.html 那個真正的視窗），
+    // 不是這個 iframe 自己——iframe 沒有「關閉自己」這回事，window.close()
+    // 對 iframe 呼叫不會有任何效果。
+    if (PLATFORM.connected) (window.top || window).close();
 }
 
 // 遊戲進行中按下「返回」：先二次確認，避免手滑中斷正在進行的一局。
