@@ -30,11 +30,10 @@ const PLATFORM = {
     // 用 <iframe> 包起來執行的（見 index.html 開頭的寬螢幕自動導向邏輯）。iframe 屬於
     // 「巢狀框架」，跟 window.open() 開出來的「彈出視窗」是完全不同的兩件事，
     // iframe 裡的 window.opener 永遠是 null，不會繼承外層視窗的 opener。
-    // window.top 在這種情境下會正確指向 desktop.html 自己的視窗，而那個視窗才是
-    // 真正被平台用 window.open() 開出來的，它的 .opener 才指得回平台。用
-    // (window.top || window).opener 兩種情境都能正確抓到，不會因為套了桌機外框
-    // 就整個跟平台斷線（斷線不會報錯、畫面照常顯示，但徽章/金幣/分數全部送不出去，
-    // 是最容易被忽略的一種靜默失敗）。
+    // window.top 在這種情境下會正確指向 desktop.html 自己的視窗，那個視窗才是
+    // 真正被平台用 window.open() 開出來的，它的 .opener 才指得回平台。這裡只是
+    // 用來判斷「連線鏈路上有沒有一個 opener 存在」，不代表送訊息時可以直接
+    // postMessage 到這個對象上（見下面 sendToPlatform 的說明）。
     connected: (typeof window !== 'undefined' && !!(window.top || window).opener),
     ready: false,           // 是否已收到 player_info
     nickname: null,
@@ -57,11 +56,26 @@ function _flushReadyCallbacks() {
 }
 
 // 送訊息給平台（任務頁面 → 平台的信封格式）。沒有 opener（直接用瀏覽器打開測試）就不送。
+//
+// ⚠️ 這裡不能用 (window.top || window).opener.postMessage(...) 直接「跳過」desktop.html
+// 這層送給平台——postMessage 送出的訊息，接收端看到的 event.source 永遠是「實際執行這行
+// 程式碼的視窗本身」，不會因為你是透過 window.top.opener 這種方式間接摸到平台視窗，
+// event.source 就變成 window.top。這裡的程式碼是在 iframe 自己的執行環境裡跑的，
+// 平台收到時 event.source 會是 iframe 自己，跟平台記錄的「window.open() 開出來的視窗」
+// （也就是 desktop.html）對不上，會被平台的安全檢查判定「視窗物件不一致」直接忽略——
+// 訊息確實送得到，但因為身分核對不過，等於白送。
+//
+// 正確做法：iframe 只送給自己的上一層（window.parent），如果目前不是在 iframe 裡
+// （手機直接開，沒有套桌機外框），window.parent 就是 window 自己，效果等同直接送給
+// window.opener。真正需要「轉發給平台」這個動作，交給 desktop.html 自己執行
+// window.opener.postMessage(...)——那才是真正被平台開出來的視窗，這樣平台收到時
+// event.source 才會正確對得上。
 function sendToPlatform(type, payload) {
     if (!PLATFORM.connected) { console.log('[platform] (測試模式，未連接平台) ' + type, payload); return; }
     const msg = { source: 'culture-task', version: 1, taskId: TASK_ID, type: type };
     if (payload !== undefined) msg.payload = payload;
-    (window.top || window).opener.postMessage(msg, '*');
+    const target = (window.self !== window.top) ? window.parent : window.opener;
+    target.postMessage(msg, '*');
 }
 
 // 小提示 Toast：優先用 welcome-screen.js 已有的 wsShowToast，沒有的話退回 console。
