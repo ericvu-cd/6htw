@@ -161,10 +161,14 @@ function reportScoreIfHigher(totalScore) {
 /* ── 任務 → 平台：exit（離開任務，回平台） ── */
 function exitToPlatform() {
     sendToPlatform('exit');
+    // postMessage 是非同步的，如果送完立刻同步關閉視窗，桌機外框模式下這則 exit
+    // 訊息還要多轉一手（iframe → window.parent → 轉發給平台），視窗有可能在轉發
+    // 完成前就被關掉，導致平台收到訊息時記錄已經被判定失效（其他任務實測遇過
+    // 「exit 訊息但查無記錄」的警告）。延遲一小段時間再關閉，確保訊息有時間走完整趟轉發。
     // 桌機外框模式下要關的是 window.top（desktop.html 那個真正的視窗），
     // 不是這個 iframe 自己——iframe 沒有「關閉自己」這回事，window.close()
     // 對 iframe 呼叫不會有任何效果。
-    if (PLATFORM.connected) (window.top || window).close();
+    if (PLATFORM.connected) setTimeout(function () { (window.top || window).close(); }, 150);
 }
 
 // 遊戲進行中按下「返回」：先二次確認，避免手滑中斷正在進行的一局。
