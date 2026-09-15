@@ -72,6 +72,25 @@
 
         fit();
         window.addEventListener('resize', fit);
+
+        /* ── 訊息轉發：desktop.html 這一層才是平台用 window.open() 真正開出來的
+           視窗，平台的 player_info／ack 訊息只會送到這裡，不會自動穿透進下面
+           的 iframe。反過來，iframe 裡的 index.html 送出的 ready／complete／
+           score／exit，也要從這裡轉發給平台，不能指望 iframe 自己直接跟平台
+           對話（iframe 的 window.opener 永遠是 null，跟外層視窗是分開的）。
+           兩個方向都要轉發，缺一邊就是這次遇到的「送得出去、但收不到玩家
+           資料」的問題。 */
+        window.addEventListener('message', function (event) {
+            const data = event.data;
+            if (!data) return;
+            if (data.source === 'culture-platform') {
+                // 平台 → desktop.html 這一層，轉發進 iframe 給真正的遊戲頁面
+                iframe.contentWindow.postMessage(data, '*');
+            } else if (data.source === 'culture-task' && window.opener) {
+                // iframe 裡的遊戲頁面 → desktop.html 這一層，轉發給平台
+                window.opener.postMessage(data, '*');
+            }
+        });
     })();
     </script>
 </body>
