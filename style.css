@@ -17,7 +17,7 @@ input, textarea {
 /* CSS 變數：--p 目前保留未使用；--ai1/--ai2/--ai3 是三個 AI 角色的識別色，
    給 .avatar-img 的 border-color 用（AI1 紅／AI2 綠／AI3 紫），
    輪到誰的高亮效果（aiPulseGlow）也是用這三個顏色。 */
-:root { --p: #1976D2; --ai1: #D32F2F; --ai2: #388E3C; --ai3: #7B1FA2; }
+:root { --p: #1976D2; --ai1: #FF7A00; --ai2: #00E676; --ai3: #D500F9; }
 /* 效能／耗電優化：App 切到背景（見 perf.js）時，暫停所有 CSS
    infinite 動畫（呼吸光暈、箭頭閃爍、自動翻牌等），避免背景空跑。 */
 body.app-bg-paused,
@@ -150,14 +150,15 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
    蓋滿全螢幕的半透明背景 + 置中的白色內容卡片 */
 #log-modal {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5); z-index: 4000;
+    background: rgba(0,0,0,0.78); z-index: 4000;
     display: none; justify-content: center; align-items: center;
 }
 #log-content {
-    background: rgba(255,255,255,0.98);
+    background: rgba(10,38,84,0.98);
     width: 90%; max-width: 500px; height: 60vh;
     border-radius: 20px; display: flex; flex-direction: column;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    border: 1.5px solid rgba(100,180,255,0.4);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 40px rgba(60,140,255,0.15);
     overflow: hidden;
 }
 .log-header {
@@ -166,8 +167,8 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     font-size: 1.2rem;
 }
 .log-header button {
-    background: #ffdfba; border: none; border-radius: 10px;
-    padding: 5px 15px; font-weight: bold; color: #d35400; cursor: pointer;
+    background: #4FD1E8; border: none; border-radius: 10px;
+    padding: 5px 15px; font-weight: bold; color: #0A3D4D; cursor: pointer;
     transition: background 0.2s, color 0.2s;
 }
 /* 複製按鈕改用半透明白底，跟 .log-header button 的橘底做出區隔 */
@@ -177,14 +178,14 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 }
 #log-messages {
     padding: 15px; overflow-y: auto; flex-grow: 1; font-size: 1rem; line-height: 1.55;
-    color: #333; font-weight: 400;
+    color: #E0F4FF; font-weight: 400;
 }
 
 /* ── 新版「分回合」出牌紀錄樣式 ──
    每個 .log-block 是一個回合的紀錄區塊，用顏色區分不同語意：
    log-pass=綠（成功跟牌）、log-fail=棕（失敗）、log-warn=橘斜體（警告/異常）、
    log-share=藍（分享/系統訊息）、log-meta=灰（時間戳等次要資訊）。 */
-.log-block { padding: 10px 0 16px; border-bottom: 1px dashed #cfd8dc; }
+.log-block { padding: 10px 0 16px; border-bottom: 1px dashed rgba(150,190,230,0.25); }
 .log-block:last-child { border-bottom: none; }
 .log-line { padding: 1px 0; word-break: break-word; }
 .log-gap { height: 8px; }
@@ -199,12 +200,12 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 .log-round-num {
     text-align: center; font-weight: 900; font-size: 1.05rem; color: #00796b;
 }
-.log-meta { color: #455a64; }
-.log-summon-caller { color: #607d8b; font-style: italic; }
-.log-pass { color: #2e7d32; font-weight: 700; }
-.log-fail { color: #8d6e63; }
-.log-warn { color: #e65100; font-style: italic; }
-.log-share { color: #1565c0; font-weight: 600; }
+.log-meta { color: #90A4C4; }
+.log-summon-caller { color: #90A4C4; font-style: italic; }
+.log-pass { color: #4CD964; font-weight: 700; }
+.log-fail { color: #FF8A65; }
+.log-warn { color: #FFAB40; font-style: italic; }
+.log-share { color: #448AFF; font-weight: 600; }
 
 
 /* =============================================
@@ -270,8 +271,8 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 }
 
 .preview-btn:active { transform: scale(0.9); }
-.btn-confirm { background: #A8E6CF; color: white; }
-.btn-cancel { background: #FFB3BA; color: white; }
+.btn-confirm { background: #00C896; color: white; }
+.btn-cancel { background: #FF5257; color: #fff; font-weight: 900; font-size: 26px; text-shadow: 0 1px 2px rgba(0,0,0,0.35); }
 
 /* 輪到誰的動畫特效 */
 @keyframes aiPulseGlow {
@@ -925,13 +926,13 @@ body.power-save #player-hand .card.card-auto-flip {
 .tag-autumn { background-color: #ff8a65; }
 .tag-winter { background-color: #4fc3f7; }
 .tag-all { background-color: #90a4ae; }
-.tag-eco { background-color: #1B5E20; }
-.tag-warn { background-color: #ba68c8; }
-.tag-migratory { background-color: #8B0000; }
-.tag-sedentary { background-color: #8d6e63; }
+.tag-eco { background-color: #2ECC71; }
+.tag-warn { background-color: #C158DC; }
+.tag-migratory { background-color: #E53935; }
+.tag-sedentary { background-color: #D2691E; }
 .tag-coastal { background-color: #FBC02D; color: #5D4037 !important; }
-.tag-ocean { background-color: #1565c0; }
-.tag-farm { background-color: #66bb6a; }
+.tag-ocean { background-color: #2979FF; }
+.tag-farm { background-color: #00897B; }
 
 /* 不可出牌：整張卡調暗＋降低彩度，一眼看出「這張現在不能用」 */
 .is-not-valid { filter: brightness(0.6) grayscale(0.2); }

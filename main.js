@@ -755,7 +755,7 @@ function showCardPreview(idx, fish, isHand = true) {
 
         const btnCancel = document.createElement("button");
         btnCancel.className = "preview-btn btn-cancel";
-        btnCancel.innerHTML = "❌";
+        btnCancel.innerHTML = "✕";
         btnCancel.onclick = (e) => { e.stopPropagation(); closePreview(); };
 
         const btnConfirm = document.createElement("button");
@@ -773,7 +773,7 @@ function showCardPreview(idx, fish, isHand = true) {
 
         const btnClose = document.createElement("button");
         btnClose.className = "preview-btn btn-cancel";
-        btnClose.innerHTML = "❌";
+        btnClose.innerHTML = "✕";
         btnClose.onclick = (e) => { e.stopPropagation(); closePreview(); };
 
         controls.appendChild(btnClose);
