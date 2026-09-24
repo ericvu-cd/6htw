@@ -843,6 +843,17 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     transform: rotateY(180deg);
 }
 
+/* iPhone（Safari / WebKit）專用修正：正反面裡面的子元素也各自設定「背對時隱藏」。
+   WebKit 會把有 position + z-index 的子元素（例如魚名 .card-n）拉到獨立圖層，
+   這種獨立圖層不會繼承父層的 backface-visibility: hidden——卡片翻到反面時，
+   已經轉到背後、左右顛倒的「正面魚名」會透出來蓋住反面魚名，變成鏡像文字。
+   Android Chrome 與電腦瀏覽器本來就不會這樣，加了這條也不受影響。 */
+.card-front > *,
+.card-back > * {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
 /* 翻轉觸發 class */
 #player-hand .card.flipped {
     transform: rotateY(180deg);
