@@ -24,7 +24,7 @@ body.app-bg-paused,
 body.app-bg-paused * {
     animation-play-state: paused !important;
 }
-/* 等待鎖定遮罩：透明但攔截所有觸控 */ 
+/* 等待鎖定遮罩：透明但攔截所有觸控 */
 #ui-lock {
     display: none;
     position: fixed;
