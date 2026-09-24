@@ -843,16 +843,30 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
     transform: rotateY(180deg);
 }
 
-/* iPhone（Safari / WebKit）專用修正：正反面裡面的子元素也各自設定「背對時隱藏」。
-   WebKit 會把有 position + z-index 的子元素（例如魚名 .card-n）拉到獨立圖層，
-   這種獨立圖層不會繼承父層的 backface-visibility: hidden——卡片翻到反面時，
-   已經轉到背後、左右顛倒的「正面魚名」會透出來蓋住反面魚名，變成鏡像文字。
-   Android Chrome 與電腦瀏覽器本來就不會這樣，加了這條也不受影響。 */
-.card-front > *,
-.card-back > * {
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
+/* ── iPhone（WebKit）翻面鏡像修正 ──
+   iPhone 上所有瀏覽器（Safari、Chrome 都一樣，蘋果規定只能用 WebKit 引擎）翻到資訊頁時，
+   魚名會變成左右顛倒的鏡像文字，但同一面的標籤卻正常。差別在於整張卡只有魚名 .card-n
+   設了 position:relative + z-index，WebKit 會把這種元素拉到獨立圖層，翻面時不再正確套用
+   backface-visibility，背對玩家的魚名就透了出來。
+   兩層修法，不再依賴 WebKit 有問題的 backface-visibility：
+   1. 手牌裡的魚名拿掉 z-index，不讓它被拉到獨立圖層（跟正常顯示的標籤一樣）
+   2. 背對玩家的那一面直接用 visibility 整面藏起來（visibility 會繼承給所有子元素，
+      獨立圖層也藏得住），切換時間點延後 0.25 秒，對準 0.5 秒翻轉動畫轉到 90 度側面、
+      看不見任何一面的那一刻，視覺上跟原本的翻轉效果一樣。 */
+#player-hand .card-n {
+    position: static;
+    z-index: auto;
 }
+#player-hand .card.card-auto-flip .card-front,
+#player-hand .card.card-auto-flip .card-back {
+    transition: visibility 0s linear .25s;
+}
+#player-hand .card.card-auto-flip .card-back { visibility: hidden; }
+#player-hand .card.card-auto-flip.card-show-info .card-front { visibility: hidden; }
+#player-hand .card.card-auto-flip.card-show-info .card-back { visibility: visible; }
+/* 省電模式固定停在資訊頁、不播翻轉，直接顯示反面，不延遲 */
+body.power-save #player-hand .card.card-auto-flip .card-front { visibility: hidden; transition: none; }
+body.power-save #player-hand .card.card-auto-flip .card-back { visibility: visible; transition: none; }
 
 /* 翻轉觸發 class */
 #player-hand .card.flipped {
