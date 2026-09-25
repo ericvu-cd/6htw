@@ -169,9 +169,10 @@ function applyPowerSaveMode() {
         if (btn) { btn.innerText = "🔋"; btn.style.opacity = "1"; btn.title = "省電模式：開（點擊關閉）"; }
     } else {
         // 只有遊戲已經開始（body 有 game-started）才需要恢復播放；
-        // 還沒開始遊戲時 ocean-bg-video 可能根本還沒建立。
+        // 還沒開始遊戲時影片可能還沒建立，或只是選漁港時先下載、還不該播放。
+        // 被瀏覽器擋下時同樣改成等玩家下一次觸碰畫面再重試。
         if (vid && vid.paused && document.body.classList.contains("game-started")) {
-            vid.play().catch(() => {});
+            playOceanVideoWithRetry(vid);
         }
         if (btn) { btn.innerText = "🔋"; btn.style.opacity = "0.4"; btn.title = "省電模式：關（點擊開啟）"; }
     }
@@ -203,9 +204,6 @@ function preloadImages(prefix, count) {
     }
 }
 
-// DOMContentLoaded 即刻預載（比 load 早，不等 BGM/大圖載完）
-// DOMContentLoaded 比 window.onload 更早觸發（不必等 BGM、大圖等資源全部載完），
-// 在這裡就先把開場故事圖、說明圖鑑、所有魚卡圖片都預先載入快取。
 // ── 桌機展示模式偵測（desktop.html 用 iframe 包住 index.html?embedded=1）──
 // 只有在 iframe 裡執行才視為桌機展示模式；手機直接開永遠是 false，不受影響。
 const isDesktopMode = (window.self !== window.top);
@@ -219,9 +217,13 @@ function scrollHand(direction) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    preloadImages('P', 9);  // 預載故事 P1-P9
-    preloadImages('F', 18); // 預載說明 F1-F18
-    preloadFishImages();     // 預載所有魚圖片
+    // 素材下載順序（原本全部在這裡一開啟就同時下載，互相搶網路，是玩家反映
+    // 「什麼都載很慢」的主因）：
+    //   1. 故事圖 P1-P9 + 開場音樂：頁面一開啟就下載（intro.js）
+    //   2. 上面兩者都下載完成 → 下載主遊戲背景音樂 #bgm（intro.js）
+    //   3. 進入主遊戲 → 預載全部魚卡，完成後接著預載說明頁音樂（initGame）
+    //   4. 說明圖 F1-F18：玩家點擊「簡介說明」時才預載（openInfo）
+    //   5. 背景影片：歡迎畫面選好漁港時下載（preloadOceanVideo）
     if (isDesktopMode) {
         document.body.classList.add('desktop-mode');
     }
@@ -230,22 +232,44 @@ document.addEventListener('DOMContentLoaded', () => {
 // 預載魚圖片
 // 把 fishDB 裡每一種魚的卡圖（fishdb/魚名.png）全部預先載入，
 // 確保遊戲中第一次翻牌、抽屜開啟時圖片是「秒顯示」不延遲。
+// 回傳一個 Promise，全部魚卡都下載完成（個別失敗也算完成，不卡住後續流程）才 resolve，
+// 讓 initGame() 可以在魚卡預載完之後接著預載說明頁音樂。
+// 同一個分頁只真正執行一次，之後重玩再呼叫直接回傳同一個 Promise。
+let fishImagesPreload = null;
 function preloadFishImages() {
-    if (typeof fishDB === "undefined") return;
-    fishDB.forEach(f => {
+    if (fishImagesPreload) return fishImagesPreload;
+    if (typeof fishDB === "undefined") return Promise.resolve();
+    fishImagesPreload = Promise.all(fishDB.map(f => new Promise(resolve => {
         const img = new Image();
+        img.onload = img.onerror = () => resolve();
         img.src = `fishdb/${f.n}.png`;
         img.decode().catch(() => {}); // 背景解碼，顯示時零延遲
-    });
+    })));
+    return fishImagesPreload;
+}
+
+// 魚卡預載完成後接著預載說明頁音樂：建立音樂物件就會開始下載，
+// 之後玩家打開說明頁或進入教學時直接使用同一個，不用再等下載。
+function preloadInfoBGM() {
+    const music = getInfoBGM();
+    music.preload = "auto";
 }
 
 // --- 故事與說明功能 ---
 let storyIdx = 1;
 let storyTimer = null;
 const totalStories = 9;
-// 新增說明專用的背景音樂
-const infoBGM = new Audio('MZ.mp3'); 
-infoBGM.loop = true; // 設定循環播放
+// 說明頁／教學共用的背景音樂：不在頁面載入時就建立（new Audio 一建立就會開始下載），
+// 改成第一次真正要播放時才建立，之後重複使用同一個。教學（tutorial.js）也透過
+// getInfoBGM() 取用，確保兩邊用的是同一個音樂物件。
+let infoBGM = null;
+function getInfoBGM() {
+    if (!infoBGM) {
+        infoBGM = new Audio('MZ.mp3');
+        infoBGM.loop = true; // 設定循環播放
+    }
+    return infoBGM;
+}
 
 // --- 故事滑動控制變數 ---
 let touchStartX = 0;
@@ -291,7 +315,14 @@ function handleSwipeInfo() {
  * 開啟圖鑑說明全螢幕頁面：重置頁碼為第 1 頁、切換背景音樂為 infoBGM、
  * 啟動自動翻頁計時器，並綁定觸控滑動事件以支援手動切頁。
  */
+let infoImagesPreloaded = false;
 function openInfo() {
+    // 說明圖 F1-F18：玩家點擊「簡介說明」時才預載（第 1 張由下面 updateInfo() 直接顯示，
+    // 其餘在自動翻頁期間背景下載），同一個分頁只預載一次
+    if (!infoImagesPreloaded) {
+        infoImagesPreloaded = true;
+        preloadImages('F', 18);
+    }
     infoIdx = 1;
     updateInfo();
     const overlay = document.getElementById("info-overlay");
@@ -299,9 +330,10 @@ function openInfo() {
     overlay.style.visibility = "visible";
     overlay.style.opacity = "1";
 	
-	infoBGM.currentTime = 0; // 從頭播放
+	const infoMusic = getInfoBGM(); // 打開說明頁才建立音樂、開始下載
+	infoMusic.currentTime = 0; // 從頭播放
     if (sfxEnabled) {
-        infoBGM.play().catch(e => console.log("音樂播放受阻，需使用者互動過才能播放:", e));
+        infoMusic.play().catch(e => console.log("音樂播放受阻，需使用者互動過才能播放:", e));
     }
 	
     startInfoTimer();
@@ -358,7 +390,7 @@ function stopInfoTimer() {
 function closeInfo() {
     stopInfoTimer();
     document.getElementById("info-overlay").style.display = "none";
-	infoBGM.pause();
+	if (infoBGM) infoBGM.pause(); // 還沒打開過說明頁時音樂根本沒建立，不用暫停
 }
 
 // 日誌視窗功能
@@ -1157,21 +1189,26 @@ function initChatLayer() {
 // 用來組出影片檔名 image/{id}.mp4。改用 id 而不是中文全名，
 // 是為了避免中文檔名在「程式碼字串」與「伺服器實際檔名」之間，
 // 因全形/半形標點、輸入法選字等因素造成打不出來的隱性不一致。
-function initOceanVideo(locationId) {
+function getOceanVideoEl() {
     let vid = document.getElementById("ocean-bg-video");
     if (!vid) {
         vid = document.createElement("video");
         vid.id = "ocean-bg-video";
-        vid.autoplay = !powerSaveMode; vid.loop = true; vid.muted = true; vid.playsInline = true;
+        // 不設 autoplay：影片可能在歡迎畫面選漁港時就先建立、先下載，
+        // 那時候還不該播放；真正開始播放一律由 initOceanVideo() 明確呼叫。
+        vid.loop = true; vid.muted = true; vid.playsInline = true;
+        vid.preload = "auto";
         document.body.appendChild(vid);
     }
+    return vid;
+}
+
+// 設定影片來源並開始下載（不播放）。同一個網址重複呼叫不會重新 load()，
+// 避免把已經緩衝的進度打掉重來（選漁港時先下載 → initGame → startGame 都會呼叫到）。
+function setOceanVideoSrc(locationId) {
+    const vid = getOceanVideoEl();
     const targetSrc = `image/${locationId}.mp4`;
-    // 避免重複呼叫（initGame 提早緩衝 + startGame 再呼叫一次）時，
-    // 用同一個網址又重新 load() 一次，把前面已經緩衝的進度打掉重來。
-    if (vid.dataset.loadedSrc === targetSrc) {
-        if (!powerSaveMode) vid.play().catch(() => {});
-        return;
-    }
+    if (vid.dataset.loadedSrc === targetSrc) return vid;
     vid.dataset.loadedSrc = targetSrc;
 
     // 診斷用：影片載入失敗時（例如檔名對不上、404）瀏覽器預設會停格在
@@ -1184,15 +1221,49 @@ function initOceanVideo(locationId) {
             `畫面目前可能仍停留在上一支成功播放的影片，看起來像「選錯地點」。`
         );
     };
-
     vid.src = targetSrc;
     vid.load();
-    // 省電模式開啟時，先解碼出第一幀當靜態背景就好，不要讓它一路播下去。
+    return vid;
+}
+
+// 歡迎畫面選好漁港時由 welcome-screen.js 呼叫：只先下載、不播放，
+// 讓影片趁玩家看漁港資訊、按「守護漁港」、轉場動畫這段時間緩衝。
+// 玩家改選別的漁港時會換成新漁港的影片重新下載。
+window.preloadOceanVideo = function (locationId) {
+    if (!locationId) return;
+    setOceanVideoSrc(locationId);
+};
+
+// 播放背景影片；被瀏覽器擋下時（最常見：iPhone 開了低耗電模式，Safari 會擋掉
+// 所有自動播放的影片，即使是靜音的；Android 省數據模式也可能如此），
+// 改成等玩家下一次觸碰畫面再自動重試——瀏覽器允許「使用者操作後」播放。
+// 原本失敗就直接忽略、不再重試，背景會一直是黑的，玩家以為是影片載入失敗。
+var oceanRetryArmed = false; // 用 var：省電切換等較早執行的程式碼呼叫到時也不會碰到宣告前存取錯誤
+function playOceanVideoWithRetry(vid) {
+    vid.play().catch(() => {
+        if (oceanRetryArmed) return; // 已經在等下一次觸碰了，不重複掛監聽
+        oceanRetryArmed = true;
+        const retry = () => {
+            document.removeEventListener("touchstart", retry, true);
+            document.removeEventListener("click", retry, true);
+            oceanRetryArmed = false;
+            if (powerSaveMode || !document.body.contains(vid)) return;
+            if (vid.paused) playOceanVideoWithRetry(vid); // 還是被擋就再等下一次觸碰
+        };
+        document.addEventListener("touchstart", retry, { capture: true, passive: true });
+        document.addEventListener("click", retry, true);
+    });
+}
+
+function initOceanVideo(locationId) {
+    const vid = setOceanVideoSrc(locationId);
+    // 省電模式：只顯示第一幀當靜態背景，不播放
     if (powerSaveMode) {
-        vid.addEventListener("loadeddata", () => vid.pause(), { once: true });
-    } else {
-        vid.play().catch(() => {});
+        if (vid.readyState >= 2) vid.pause();
+        else vid.addEventListener("loadeddata", () => vid.pause(), { once: true });
+        return;
     }
+    playOceanVideoWithRetry(vid);
 }
 
 // 由 wsStartGame() 在按下「守護漁港」的當下鎖住並傳入，
@@ -1219,6 +1290,11 @@ function initGame(lockedLocationId) {
     // 提早開始緩衝背景海洋影片：不用等 3.5 秒淡出轉場結束才開始下載，
     // 讓影片有更多時間（淡出轉場 3.5 秒 + startGame 後渲染 2 秒 ≈ 5.5 秒）
     // 在畫面真正需要它之前完成緩衝，降低弱網環境下開局卡頓的機率。
+    // 進入主遊戲才預載全部魚卡圖片（原本在頁面一開啟就下載，跟開場畫面搶網路）。
+    // 這時轉場動畫還有約 5 秒，第一次發牌前有時間先下載好。
+    // 魚卡全部下載完成後，接著預載說明頁音樂。
+    preloadFishImages().then(preloadInfoBGM);
+
     {
         const earlyLocation = (typeof locationDB !== "undefined" && locationDB.find)
             ? locationDB.find(loc => loc.id === lockedGameLocationId) || locationDB[0]

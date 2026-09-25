@@ -448,9 +448,11 @@ function startTutorial() {
     phase     = "WAIT";
 
     // 播放背景音樂（依音效設定決定）
-    if (typeof infoBGM !== "undefined" && typeof sfxEnabled !== "undefined" && sfxEnabled) {
-        infoBGM.currentTime = 0;
-        infoBGM.play().catch(e => console.log("教學BGM播放受阻:", e));
+    // 說明頁音樂改成用到才建立（見 main.js 的 getInfoBGM），這裡透過同一個函式取用
+    if (typeof getInfoBGM === "function" && typeof sfxEnabled !== "undefined" && sfxEnabled) {
+        const tutorialMusic = getInfoBGM();
+        tutorialMusic.currentTime = 0;
+        tutorialMusic.play().catch(e => console.log("教學BGM播放受阻:", e));
     }
 
     setTimeout(() => {
@@ -877,7 +879,7 @@ function tutorFinish() {
     tutorHideOverlay();
 
     // 停止教學 BGM
-    if (typeof infoBGM !== "undefined") infoBGM.pause();
+    if (typeof infoBGM !== "undefined" && infoBGM) infoBGM.pause(); // 沒建立過就不用暫停
 
     document.body.classList.remove("game-started");
 

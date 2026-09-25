@@ -105,7 +105,9 @@
   }
   </script>
 
-    <audio id="bgm" loop preload="auto">
+    <!-- preload="none"：頁面一開啟不下載主遊戲音樂，等故事圖與開場音樂都下載完，
+         才由 intro.js 的 preloadMainBgm() 開始下載，避免跟開場素材搶網路 -->
+    <audio id="bgm" loop preload="none">
         <source src="Below_the_Surface.mp3" type="audio/mpeg">
     </audio>
 

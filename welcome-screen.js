@@ -1021,6 +1021,10 @@
 		window.selectedLocationId = id;
 		sessionStorage.setItem('selectedLocationId', id);
 
+		/* 選好漁港就先下載這個漁港的背景影片（只下載不播放，函式定義在 main.js），
+		   趁玩家看資訊、按「守護漁港」、轉場動畫這段時間緩衝，進遊戲時比較不會卡住。 */
+		if(typeof window.preloadOceanVideo === 'function') window.preloadOceanVideo(id);
+
 		/* 更新面板 */
 		var info = getHarborInfo()[id] || {};
 		document.getElementById('ws-panel-harbor-name').innerHTML = (info.name || id) + ' <span class="ws-stars">' + (info.stars || '') + '</span>';

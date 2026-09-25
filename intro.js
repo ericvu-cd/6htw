@@ -316,12 +316,68 @@ setTimeout(function () {
    接著去抓一個其實已經被移除的 #intro-screen，導致
    introScr.addEventListener 打在 null 上炸掉。
    改成直接檢查 #intro-screen 元素本身還在不在，才是真正的事實來源。 */
+/* ── 開場素材下載順序 ──
+   頁面一開啟就下載故事圖 P1-P9 和開場音樂，兩者都下載完成（音樂以瀏覽器判斷
+   可以順暢播完為準）才開始下載主遊戲背景音樂 #bgm，不讓它跟開場素材搶網路。
+   iPhone 在玩家點擊畫面前完全不下載音樂，所以另外設一個保險計時器，
+   開場素材遲遲沒有完成時也會照常開始下載主遊戲音樂，不會卡住。
+   （魚卡、說明頁音樂、說明圖、背景影片的下載時機見 main.js DOMContentLoaded 的說明） */
+var __mainBgmPreloaded = false;
+function preloadMainBgm() {
+  if (__mainBgmPreloaded) return;
+  __mainBgmPreloaded = true;
+  var mainBgm = document.getElementById('bgm');
+  if (mainBgm && mainBgm.paused) {
+    mainBgm.preload = 'auto';
+    mainBgm.load();
+  }
+}
+
 var __introScreenEl = document.getElementById('intro-screen');
+if (!__introScreenEl) {
+  /* 跳過開場（同分頁重新整理等情況）：沒有開場音樂要等，直接下載主遊戲音樂 */
+  preloadMainBgm();
+}
 if (__introScreenEl) {
   (function () {
     var IMGS = ['image/P1.jpg','image/P2.jpg','image/P3.jpg','image/P4.jpg','image/P5.jpg','image/P6.jpg','image/P7.jpg','image/P8.jpg','image/P9.jpg'];
     var STAY = 11400, BREATH_DUR = 6000, FADE_OUT = 900, BLACK = 400, FADE_IN = 800;
     var alive = true, slotA = true, bgmEl = null, volTmr = null, wakeLock = null;
+
+    /* 故事圖跟開場音樂都完成才下載主遊戲音樂：用計數器等兩件事都回報完成 */
+    var introAssetsPending = 2; // 故事圖一批 + 開場音樂一首
+    function introAssetDone() {
+      introAssetsPending--;
+      if (introAssetsPending <= 0) preloadMainBgm();
+    }
+
+    /* 開場音樂在頁面載入時就建立、開始下載（原本是點擊開場才建立，
+       點下去才開始下載，音樂常常慢半拍才出來）。下載失敗也算完成，不卡住後續流程。 */
+    bgmEl = new Audio('Where_the_Tide_Breaks.mp3');
+    bgmEl.preload = 'auto';
+    bgmEl.loop = false;
+    var introMusicDone = false;
+    function onIntroMusicReady() {
+      if (introMusicDone) return;
+      introMusicDone = true;
+      introAssetDone();
+    }
+    bgmEl.addEventListener('canplaythrough', onIntroMusicReady, { once: true });
+    bgmEl.addEventListener('error', onIntroMusicReady, { once: true });
+
+    /* 故事圖 P1-P9：頁面一開啟就下載，9 張全部完成（個別失敗也算）才回報 */
+    var storyImgsLeft = IMGS.length;
+    IMGS.forEach(function (src) {
+      var pre = new Image();
+      pre.onload = pre.onerror = function () {
+        storyImgsLeft--;
+        if (storyImgsLeft === 0) introAssetDone();
+      };
+      pre.src = src;
+      if (pre.decode) pre.decode().catch(function () {});
+    });
+
+    setTimeout(preloadMainBgm, 12000); // 保險：開場素材遲遲沒有完成也照常往下
     var imgA, imgB, blkOvl, scanEl, flashEl;
 
     function fadeVol(to, ms) {
@@ -353,8 +409,7 @@ if (__introScreenEl) {
         }).catch(function () {});
       }
 
-		bgmEl = new Audio('Where_the_Tide_Breaks.mp3');
-		bgmEl.loop = false;
+		/* 開場音樂已經在頁面載入時建立並開始下載，這裡直接播放同一個 */
 		bgmEl.volume = 0;
 		bgmEl.play().catch(function () {});
 		fadeVol(0.78, 2200);
