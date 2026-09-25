@@ -145,6 +145,10 @@ body.game-started > *:not(#welcome-screen):not(#intro-screen):not(#collection-mo
 /* 歷史紀錄按鈕 */ 
 /* 出牌記錄按鈕的外觀已整合進上方 #top-bar 的共用規則，這裡只保留 hover 效果 */
 #log-btn:active { transform: scale(0.95); }
+/* 主遊戲頁暫時不顯示出牌記錄按鈕：只隱藏按鈕，按鈕元素與 openLog() 等出牌記錄功能
+   全部保留（記錄照常累積）。之後要恢復顯示，刪掉這條規則即可。
+   用 !important 是因為下方 #top-bar 的共用規則會把它設成 display:flex。 */
+#log-btn { display: none !important; }
 
 /* 彈出式日誌視窗：點 #log-btn 後由 main.js 切 display:flex 顯示，
    蓋滿全螢幕的半透明背景 + 置中的白色內容卡片 */

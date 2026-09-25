@@ -732,7 +732,7 @@
 			</div>
 			<div id="ws-top-icons">
 				<div class="ws-icon-btn" id="ws-sfx-btn" onclick="wsToggleSound()" title="音效・音樂">🔊</div>
-				<div class="ws-icon-btn" id="ws-rpt-btn" onclick="wsToggleReport()" title="結算報告">📊</div>
+				<div class="ws-icon-btn" id="ws-rpt-btn" onclick="wsToggleReport()" title="結算報告">🧮</div>
 			</div>
 		</div>
 
@@ -1176,7 +1176,7 @@
 		/* 清空舊內容 */
 		btn.innerHTML = '';
 		var icon = document.createElement('span');
-		icon.textContent = '📊';
+		icon.textContent = '🧮';
 		if(!_rptOn){ icon.style.filter = 'grayscale(1)'; }
 		btn.appendChild(icon);
 		if(!_rptOn){
@@ -1195,7 +1195,7 @@
 		_updateRptBtn();
 		if(typeof showSummaryMode !== 'undefined') showSummaryMode = _rptOn;
 		sessionStorage.setItem('reportMode', _rptOn ? 'true' : 'false');
-		wsShowToast(_rptOn ? '📊 結算報告已開啟' : '📊 結算報告已關閉');
+		wsShowToast(_rptOn ? '🧮 結算報告已開啟' : '🧮 結算報告已關閉');
 	};
 
 	/* ── 守護漁港（啟航） ── */
@@ -1234,10 +1234,10 @@
 		if(rBtn){
 			if(_rptOn){
 				rBtn.style.opacity = '1';
-				rBtn.innerHTML = '📊';
+				rBtn.innerHTML = '🧮';
 			} else {
 				rBtn.style.opacity = '0.85';
-				rBtn.innerHTML = '<span style="filter:grayscale(1);display:inline-block;">📊</span>' +
+				rBtn.innerHTML = '<span style="filter:grayscale(1);display:inline-block;">🧮</span>' +
 					'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;color:#ff2222;pointer-events:none;">✕</span>';
 			}
 		}

@@ -1160,8 +1160,8 @@ function toggleMusic() {
     if (music.paused) {
         music.play();
         sfxEnabled = true;
-        btn.innerText = "🎵";
-        btn.style.filter = "sepia(1) saturate(3) hue-rotate(175deg) brightness(1.4)";
+        btn.innerText = "🔊";
+        btn.style.filter = "";
         btn.style.opacity = "1";
     } else {
         music.pause();
@@ -1312,8 +1312,8 @@ function initGame(lockedLocationId) {
     if (sfxEnabled) {
         music.play().then(() => {
             music.volume = 0.1;
-            btn.style.filter = "sepia(1) saturate(3) hue-rotate(175deg) brightness(1.4)";
-            btn.innerText = "🎵";
+            btn.style.filter = "";
+            btn.innerText = "🔊";
             btn.style.opacity = "1";
         }).catch(() => {
             btn.innerText = "🔇";
@@ -2876,10 +2876,10 @@ function toggleReportMode() {
     const btn = document.getElementById("report-control");
     if (showSummaryMode) {
         btn.style.opacity = "1";
-        btn.innerHTML = "📊";
+        btn.innerHTML = "🧮";
     } else {
         btn.style.opacity = "0.85";
-        btn.innerHTML = `<span style="filter:grayscale(1);display:inline-block;">📊</span><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;color:#ff2222;pointer-events:none;">✕</span>`;
+        btn.innerHTML = `<span style="filter:grayscale(1);display:inline-block;">🧮</span><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.2em;font-weight:900;color:#ff2222;pointer-events:none;">✕</span>`;
         // 關掉時清除可能殘留的結算 overlay
         const existing = document.getElementById("round-summary-overlay");
         if (existing) {
